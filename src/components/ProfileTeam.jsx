@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { adminAPI } from "../api/admin";
-import { authUtils } from "../utils/authUtils";
+import { teamAPI, teamUtils } from "../api/teamAPI";
 
-const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
-  const [adminData, setAdminData] = useState({
+const ProfileTeam = ({
+  onReturnToDashboard,
+  onAvatarUpdate,
+  userRole,
+  userData,
+}) => {
+  const [profileData, setProfileData] = useState({
     name: "",
-    first_name: "",
-    last_name: "",
     email: "",
     phone: "",
+    adresse: "",
+    departement: "",
+    username: "",
+    responsabilites: "",
     current_password: "",
     new_password: "",
     new_password_confirmation: "",
@@ -21,41 +27,77 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
 
+  // Couleurs par rôle
+  const roleColors = {
+    admin: {
+      bg: "bg-blue-600",
+      gradient: "from-blue-600 to-blue-700",
+      text: "text-blue-600",
+      light: "bg-blue-50",
+    },
+    agent: {
+      bg: "bg-green-600",
+      gradient: "from-green-600 to-green-700",
+      text: "text-green-600",
+      light: "bg-green-50",
+    },
+    investigateur: {
+      bg: "bg-purple-600",
+      gradient: "from-purple-600 to-purple-700",
+      text: "text-purple-600",
+      light: "bg-purple-50",
+    },
+  };
+
+  const currentRole = roleColors[userRole] || roleColors.admin;
+
   useEffect(() => {
     console.log("🔍 Starting profile fetch...");
-    fetchAdminProfile();
-  }, []);
+    console.log("👤 User role:", userRole);
+    console.log("🔐 Auth check:", teamUtils.isAuthenticated(userRole));
+    console.log("📦 Storage check:", {
+      localStorage: localStorage.getItem(`${userRole}_token`),
+      sessionStorage: sessionStorage.getItem(`${userRole}_token`),
+    });
 
-  const fetchAdminProfile = async () => {
-    if (!authUtils.isAuthenticated()) {
-      console.error("❌ No authentication token found");
+    fetchUserProfile();
+  }, [userRole, userData]);
+
+  const fetchUserProfile = async () => {
+    // Vérification améliorée de l'authentification
+    const token = teamUtils.getAuthToken(userRole);
+    console.log("🔑 Token found:", token ? "Yes" : "No");
+
+    if (!token) {
+      console.error("❌ No authentication token found for role:", userRole);
       setErrors({ submit: "Session expirée. Veuillez vous reconnecter." });
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log("🔄 Fetching admin profile...");
+      console.log("🔄 Fetching user profile for role:", userRole);
 
-      const response = await adminAPI.getProfile();
+      const response = await teamAPI.getProfile(userRole);
       console.log("✅ API Response:", response);
 
       if (response.success) {
         const { data } = response;
         console.log("📊 Profile data received:", data);
 
-        setAdminData((prev) => ({
+        setProfileData((prev) => ({
           ...prev,
           name: data.name || "",
-          first_name: data.first_name || "",
-          last_name: data.last_name || "",
           email: data.email || "",
           phone: data.phone || "",
+          adresse: data.adresse || "",
+          departement: data.departement || "",
+          username: data.username || "",
+          responsabilites: data.responsabilites || "",
         }));
 
         if (data.avatar) {
           console.log("🖼️ Avatar URL from API:", data.avatar);
-          // Ajouter un timestamp pour éviter le cache
           setAvatarPreview(`${data.avatar}?t=${new Date().getTime()}`);
         } else {
           console.log("📝 No avatar found, using initials");
@@ -82,11 +124,10 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
 
     if (error.response?.status === 401) {
       errorMessage = "Session expirée. Veuillez vous reconnecter.";
-      authUtils.logout();
+      teamUtils.logout(userRole);
     } else if (error.response?.data?.message) {
       errorMessage = error.response.data.message;
     } else if (error.response?.data?.errors) {
-      // Gestion des erreurs de validation Laravel
       const validationErrors = error.response.data.errors;
       setErrors(validationErrors);
       return;
@@ -99,12 +140,11 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setAdminData((prev) => ({
+    setProfileData((prev) => ({
       ...prev,
       [name]: value,
     }));
 
-    // Effacer l'erreur du champ modifié
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -112,7 +152,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
       }));
     }
 
-    // Effacer l'erreur générale
     if (errors.submit) {
       setErrors((prev) => ({ ...prev, submit: "" }));
     }
@@ -151,11 +190,10 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
       reader.readAsDataURL(file);
 
       console.log("🔄 Uploading avatar...");
-      const response = await adminAPI.updateAvatar(file);
+      const response = await teamAPI.updateAvatar(userRole, file);
       console.log("✅ Avatar upload response:", response);
 
       if (response.success) {
-        // Utiliser l'URL retournée par l'API avec timestamp
         const newAvatarUrl = response.data?.avatar_url || response.avatar_url;
         console.log("🖼️ New avatar URL:", newAvatarUrl);
 
@@ -167,25 +205,20 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         setTimeout(() => setSuccessMessage(""), 3000);
         setErrors({});
 
-        // Notifier le parent que l'avatar a été mis à jour
         if (onAvatarUpdate) {
           onAvatarUpdate(newAvatarUrl);
         }
 
-        // Recharger les données du profil
         setTimeout(() => {
-          fetchAdminProfile();
+          fetchUserProfile();
         }, 500);
       }
     } catch (error) {
       console.error("❌ Error updating avatar:", error);
       handleApiError(error, "Erreur lors du téléchargement de l'avatar");
-
-      // Revenir à l'ancien avatar en cas d'erreur
-      fetchAdminProfile();
+      fetchUserProfile();
     } finally {
       setAvatarLoading(false);
-      // Réinitialiser l'input file
       e.target.value = "";
     }
   };
@@ -193,8 +226,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   const handleSaveInformations = async (e) => {
     e.preventDefault();
 
-    // Validation basique
-    if (!adminData.name.trim() || !adminData.email.trim()) {
+    if (!profileData.name.trim() || !profileData.email.trim()) {
       setErrors({ submit: "Le nom et l'email sont obligatoires" });
       return;
     }
@@ -202,25 +234,23 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
     setIsLoading(true);
 
     try {
-      const profileData = {
-        name: adminData.name.trim(),
-        first_name: adminData.first_name.trim(),
-        last_name: adminData.last_name.trim(),
-        email: adminData.email.trim(),
-        phone: adminData.phone.trim(),
+      const profileInfo = {
+        name: profileData.name.trim(),
+        email: profileData.email.trim(),
+        phone: profileData.phone.trim(),
+        adresse: profileData.adresse.trim(),
       };
 
-      console.log("🔄 Updating profile with data:", profileData);
-      const response = await adminAPI.updateProfile(profileData);
+      console.log("🔄 Updating profile with data:", profileInfo);
+      const response = await teamAPI.updateProfile(userRole, profileInfo);
 
       if (response.success) {
         setSuccessMessage("Informations mises à jour avec succès");
         setTimeout(() => setSuccessMessage(""), 3000);
         setErrors({});
 
-        // Mettre à jour les données locales
         if (response.data) {
-          setAdminData((prev) => ({
+          setProfileData((prev) => ({
             ...prev,
             ...response.data,
           }));
@@ -237,13 +267,12 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   const handleChangePassword = async (e) => {
     e.preventDefault();
 
-    // Validation des mots de passe
-    if (adminData.new_password !== adminData.new_password_confirmation) {
+    if (profileData.new_password !== profileData.new_password_confirmation) {
       setErrors({ submit: "Les mots de passe ne correspondent pas" });
       return;
     }
 
-    if (adminData.new_password.length < 8) {
+    if (profileData.new_password.length < 8) {
       setErrors({
         submit: "Le mot de passe doit contenir au moins 8 caractères",
       });
@@ -254,20 +283,19 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
 
     try {
       const passwordData = {
-        current_password: adminData.current_password,
-        new_password: adminData.new_password,
-        new_password_confirmation: adminData.new_password_confirmation,
+        current_password: profileData.current_password,
+        new_password: profileData.new_password,
+        new_password_confirmation: profileData.new_password_confirmation,
       };
 
       console.log("🔄 Changing password...");
-      const response = await adminAPI.updatePassword(passwordData);
+      const response = await teamAPI.updatePassword(userRole, passwordData);
 
       if (response.success) {
         setSuccessMessage("Mot de passe changé avec succès");
         setTimeout(() => setSuccessMessage(""), 3000);
 
-        // Réinitialiser les champs de mot de passe
-        setAdminData((prev) => ({
+        setProfileData((prev) => ({
           ...prev,
           current_password: "",
           new_password: "",
@@ -283,12 +311,19 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
     }
   };
 
-  // Fonction pour obtenir les initiales de l'admin
+  const getRoleLabel = () => {
+    const labels = {
+      admin: "Administrateur",
+      agent: "Agent",
+      investigateur: "Investigateur",
+    };
+    return labels[userRole] || "Utilisateur";
+  };
+
   const getInitials = () => {
-    if (adminData.first_name && adminData.last_name) {
-      return `${adminData.first_name[0]}${adminData.last_name[0]}`.toUpperCase();
-    }
-    return adminData.name ? adminData.name.substring(0, 2).toUpperCase() : "AD";
+    return profileData.name
+      ? profileData.name.substring(0, 2).toUpperCase()
+      : getRoleLabel().substring(0, 2).toUpperCase();
   };
 
   const clearMessages = () => {
@@ -296,12 +331,32 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
     setErrors({});
   };
 
-  // Effacer les messages après changement d'onglet
   useEffect(() => {
     clearMessages();
   }, [activeTab]);
 
-  if (isLoading && !adminData.name) {
+  // Si pas de token, afficher un message d'erreur clair
+  if (!teamUtils.getAuthToken(userRole)) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <h2 className="font-bold text-lg">Session expirée</h2>
+            <p>Votre session a expiré ou vous n'êtes pas connecté.</p>
+            <p className="text-sm mt-2">Veuillez vous reconnecter.</p>
+          </div>
+          <button
+            onClick={onReturnToDashboard}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retour au tableau de bord
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading && !profileData.name) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -319,7 +374,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         <div className="mb-6">
           <button
             onClick={onReturnToDashboard}
-            className="flex items-center text-blue-600 hover:text-blue-800 transition-colors font-medium"
+            className="flex items-center text-gray-600 hover:text-gray-800 transition-colors font-medium"
             disabled={isLoading}
           >
             <svg
@@ -341,17 +396,16 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {/* En-tête du profil */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8">
+          <div className={`bg-gradient-to-r ${currentRole.gradient} px-6 py-8`}>
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-blue-600 text-2xl font-bold border-4 border-white shadow-lg overflow-hidden">
+                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-white text-2xl font-bold border-4 border-white shadow-lg overflow-hidden">
                   {avatarPreview ? (
                     <img
                       src={avatarPreview}
                       alt="Avatar"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        // Fallback si l'image ne charge pas
                         e.target.style.display = "none";
                         e.target.nextSibling.style.display = "flex";
                       }}
@@ -360,7 +414,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                   <span
                     className={`flex items-center justify-center w-full h-full ${
                       avatarPreview ? "hidden" : ""
-                    }`}
+                    } ${currentRole.text}`}
                   >
                     {getInitials()}
                   </span>
@@ -369,12 +423,12 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                 {/* Bouton de changement d'avatar */}
                 <label
                   htmlFor="avatar-upload"
-                  className={`absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full cursor-pointer shadow-lg hover:bg-blue-600 transition-colors ${
+                  className={`absolute bottom-0 right-0 bg-white text-gray-700 p-2 rounded-full cursor-pointer shadow-lg hover:bg-gray-100 transition-colors ${
                     avatarLoading ? "opacity-50 cursor-not-allowed" : ""
                   }`}
                 >
                   {avatarLoading ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
                   ) : (
                     <svg
                       className="w-4 h-4"
@@ -409,12 +463,11 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
 
               <div className="text-white">
                 <h1 className="text-2xl font-bold">
-                  {adminData.first_name && adminData.last_name
-                    ? `${adminData.first_name} ${adminData.last_name}`
-                    : adminData.name || "Administrateur"}
+                  {profileData.name || getRoleLabel()}
                 </h1>
-                <p className="text-blue-100">{adminData.email}</p>
-                <p className="text-blue-100 text-sm mt-1">Administrateur</p>
+                <p className="text-blue-100">{profileData.email}</p>
+                <p className="text-blue-100 text-sm mt-1">{getRoleLabel()}</p>
+                <p className="text-blue-100 text-sm">@{profileData.username}</p>
               </div>
             </div>
           </div>
@@ -433,7 +486,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                 onClick={() => setActiveTab("informations")}
                 className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
                   activeTab === "informations"
-                    ? "border-blue-600 text-blue-600"
+                    ? `${currentRole.text} border-current`
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -443,7 +496,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                 onClick={() => setActiveTab("password")}
                 className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
                   activeTab === "password"
-                    ? "border-blue-600 text-blue-600"
+                    ? `${currentRole.text} border-current`
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -471,47 +524,116 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
             {activeTab === "informations" && (
               <form onSubmit={handleSaveInformations} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {["name", "first_name", "last_name", "email", "phone"].map(
-                    (field) => (
-                      <div
-                        key={field}
-                        className={field === "phone" ? "md:col-span-2" : ""}
-                      >
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {field === "name" && "Nom d'affichage *"}
-                          {field === "first_name" && "Prénom"}
-                          {field === "last_name" && "Nom"}
-                          {field === "email" && "Email *"}
-                          {field === "phone" && "Téléphone"}
-                        </label>
-                        <input
-                          type={field === "email" ? "email" : "text"}
-                          name={field}
-                          value={adminData[field]}
-                          onChange={handleInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                            errors[field] ? "border-red-300" : "border-gray-300"
-                          } ${field === "email" ? "bg-gray-50" : ""}`}
-                          disabled={isLoading || field === "email"}
-                          required={field === "name" || field === "email"}
-                        />
-                        {errors[field] && (
-                          <p className="mt-1 text-sm text-red-600">
-                            {Array.isArray(errors[field])
-                              ? errors[field][0]
-                              : errors[field]}
-                          </p>
-                        )}
-                      </div>
-                    )
-                  )}
+                  {/* Informations de base */}
+                  {["name", "email", "phone", "adresse"].map((field) => (
+                    <div
+                      key={field}
+                      className={
+                        field === "adresse" || field === "phone"
+                          ? "md:col-span-2"
+                          : ""
+                      }
+                    >
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {field === "name" && "Nom et prénom *"}
+                        {field === "email" && "Email *"}
+                        {field === "phone" && "Téléphone"}
+                        {field === "adresse" && "Adresse"}
+                      </label>
+                      <input
+                        type={field === "email" ? "email" : "text"}
+                        name={field}
+                        value={profileData[field]}
+                        onChange={handleInputChange}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors[field] ? "border-red-300" : "border-gray-300"
+                        }`}
+                        disabled={isLoading}
+                        required={field === "name" || field === "email"}
+                      />
+                      {errors[field] && (
+                        <p className="mt-1 text-sm text-red-600">
+                          {Array.isArray(errors[field])
+                            ? errors[field][0]
+                            : errors[field]}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Informations système (lecture seule) */}
+                  <div className="md:col-span-2">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4 border-b pb-2">
+                      Informations système
+                    </h3>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Département
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.departement || "Non spécifié"}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                      disabled
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Cette information ne peut pas être modifiée
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nom d'utilisateur
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.username || "Non spécifié"}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                      disabled
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Cette information ne peut pas être modifiée
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Rôle
+                    </label>
+                    <input
+                      type="text"
+                      value={getRoleLabel()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                      disabled
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Responsabilités
+                    </label>
+                    <textarea
+                      value={
+                        profileData.responsabilites ||
+                        "Aucune responsabilité spécifiée"
+                      }
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 resize-none"
+                      disabled
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Ces informations sont gérées par l'administrateur
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-4 border-t border-gray-200">
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className={`px-6 py-2 ${currentRole.bg} text-white rounded-lg hover:opacity-90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
                   >
                     {isLoading ? (
                       <>
@@ -547,7 +669,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                     <input
                       type="password"
                       name={field}
-                      value={adminData[field]}
+                      value={profileData[field]}
                       onChange={handleInputChange}
                       className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                         errors[field] ? "border-red-300" : "border-gray-300"
@@ -574,7 +696,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className={`px-6 py-2 ${currentRole.bg} text-white rounded-lg hover:opacity-90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
                   >
                     {isLoading ? (
                       <>
@@ -595,4 +717,4 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   );
 };
 
-export default AdminProfile;
+export default ProfileTeam;
