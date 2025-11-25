@@ -77,7 +77,7 @@ const Login = () => {
         setUserType("admin");
 
         teamUtils.setAuthData(authToken, res.data.user, rememberMe, "admin");
-        
+
         console.log("✅ Connexion admin réussie");
       } catch (adminError) {
         if (
@@ -107,7 +107,7 @@ const Login = () => {
 
   const handleLogout = () => {
     console.log(`🚪 Déconnexion de l'utilisateur: ${userType}`);
-    
+
     if (userType === "admin") {
       const currentToken = teamUtils.getAuthToken("admin");
       if (currentToken) {
@@ -125,7 +125,8 @@ const Login = () => {
     } else {
       const currentToken = teamUtils.getAuthToken(userType?.toLowerCase());
       if (currentToken) {
-        teamService.logout()
+        teamService
+          .logout()
           .then(() => console.log("✅ Déconnexion team réussie"))
           .catch((err) => console.error("❌ Erreur déconnexion team:", err));
       }

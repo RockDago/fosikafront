@@ -21,6 +21,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
 
+  // ✅ Fonction unique pour gérer les erreurs API
   const handleApiError = useCallback((error, defaultMessage) => {
     let errorMessage = defaultMessage;
 
@@ -155,10 +156,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
       console.log("✅ Avatar upload response:", response);
 
       if (response.success) {
-        // Utiliser l'URL retournée par l'API avec timestamp
         const newAvatarUrl = response.data?.avatar_url || response.avatar_url;
-        console.log("🖼️ New avatar URL:", newAvatarUrl);
-
         if (newAvatarUrl) {
           setAvatarPreview(`${newAvatarUrl}?t=${new Date().getTime()}`);
         }
@@ -167,12 +165,10 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         setTimeout(() => setSuccessMessage(""), 3000);
         setErrors({});
 
-        // Notifier le parent que l'avatar a été mis à jour
         if (onAvatarUpdate) {
           onAvatarUpdate(newAvatarUrl);
         }
 
-        // Recharger les données du profil
         setTimeout(() => {
           fetchAdminProfile();
         }, 500);
@@ -180,12 +176,9 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
     } catch (error) {
       console.error("❌ Error updating avatar:", error);
       handleApiError(error, "Erreur lors du téléchargement de l'avatar");
-
-      // Revenir à l'ancien avatar en cas d'erreur
       fetchAdminProfile();
     } finally {
       setAvatarLoading(false);
-      // Réinitialiser l'input file
       e.target.value = "";
     }
   };
@@ -193,7 +186,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   const handleSaveInformations = async (e) => {
     e.preventDefault();
 
-    // Validation basique
     if (!adminData.name.trim() || !adminData.email.trim()) {
       setErrors({ submit: "Le nom et l'email sont obligatoires" });
       return;
@@ -218,7 +210,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         setTimeout(() => setSuccessMessage(""), 3000);
         setErrors({});
 
-        // Mettre à jour les données locales
         if (response.data) {
           setAdminData((prev) => ({
             ...prev,
@@ -237,7 +228,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   const handleChangePassword = async (e) => {
     e.preventDefault();
 
-    // Validation des mots de passe
     if (adminData.new_password !== adminData.new_password_confirmation) {
       setErrors({ submit: "Les mots de passe ne correspondent pas" });
       return;
@@ -266,7 +256,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         setSuccessMessage("Mot de passe changé avec succès");
         setTimeout(() => setSuccessMessage(""), 3000);
 
-        // Réinitialiser les champs de mot de passe
         setAdminData((prev) => ({
           ...prev,
           current_password: "",
@@ -283,7 +272,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
     }
   };
 
-  // Fonction pour obtenir les initiales de l'admin
   const getInitials = () => {
     if (adminData.first_name && adminData.last_name) {
       return `${adminData.first_name[0]}${adminData.last_name[0]}`.toUpperCase();
@@ -296,7 +284,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
     setErrors({});
   };
 
-  // Effacer les messages après changement d'onglet
   useEffect(() => {
     clearMessages();
   }, [activeTab]);
@@ -351,7 +338,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                       alt="Avatar"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        // Fallback si l'image ne charge pas
                         e.target.style.display = "none";
                         e.target.nextSibling.style.display = "flex";
                       }}
@@ -539,10 +525,10 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                 ].map((field) => (
                   <div key={field}>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {field === "current_password" && "Mot de passe actuel *"}
-                      {field === "new_password" && "Nouveau mot de passe *"}
+                      {field === "current_password" && "Mot de passe actuel"}
+                      {field === "new_password" && "Nouveau mot de passe"}
                       {field === "new_password_confirmation" &&
-                        "Confirmer le nouveau mot de passe *"}
+                        "Confirmer le nouveau mot de passe"}
                     </label>
                     <input
                       type="password"
@@ -552,7 +538,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                       className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                         errors[field] ? "border-red-300" : "border-gray-300"
                       }`}
-                      disabled={isLoading}
                       required
                     />
                     {errors[field] && (
@@ -560,11 +545,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
                         {Array.isArray(errors[field])
                           ? errors[field][0]
                           : errors[field]}
-                      </p>
-                    )}
-                    {field === "new_password" && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        Le mot de passe doit contenir au moins 8 caractères.
                       </p>
                     )}
                   </div>
