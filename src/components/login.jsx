@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from "../config/axios";
 import { teamService } from "../services/teamService";
+import { teamUtils } from "../api/teamAPI";
 import DashboardAdmin from "./DashboardAdmin";
 import DashboardAgent from "./DashboardAgent";
-import DashboardInvestigation from "./DashboardInvestigation";
+import DashboardInvestigation from "./DashboardInvest";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -14,7 +15,9 @@ const Login = () => {
     localStorage.getItem("admin_token") || sessionStorage.getItem("admin_token")
   );
   const [teamToken, setTeamToken] = useState(
-    localStorage.getItem("team_token") || sessionStorage.getItem("team_token")
+    teamUtils.getAuthToken("agent") ||
+      teamUtils.getAuthToken("investigateur") ||
+      teamUtils.getAuthToken("admin")
   );
   const [userType, setUserType] = useState(
     localStorage.getItem("user_type") || sessionStorage.getItem("user_type")
@@ -22,7 +25,6 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Fonction pour afficher/masquer le mot de passe
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
@@ -33,7 +35,37 @@ const Login = () => {
     setError("");
 
     try {
-      // Essayer d'abord la connexion admin
+      // ✅ Essai de connexion Team (Agent/Investigateur)
+      try {
+        const teamRes = await teamService.login({
+          email,
+          password,
+          remember: rememberMe,
+        });
+
+        if (teamRes.success) {
+          const authToken = teamRes.data.token;
+          const userRole = teamRes.data.user.role;
+
+          setTeamToken(authToken);
+          setUserType(userRole);
+
+          teamUtils.setAuthData(
+            authToken,
+            teamRes.data.user,
+            rememberMe,
+            userRole.toLowerCase()
+          );
+
+          setLoading(false);
+          return;
+        }
+      } catch (teamError) {
+        // Continuer vers la connexion admin si échec team
+        console.log("❌ Échec connexion team, tentative admin...");
+      }
+
+      // ✅ Essai de connexion Admin
       try {
         const res = await axios.post("/admin/login", {
           email,
@@ -44,95 +76,40 @@ const Login = () => {
         setToken(authToken);
         setUserType("admin");
 
-        // Stocker le token et le type d'utilisateur
-        if (rememberMe) {
-          localStorage.setItem("admin_token", authToken);
-          localStorage.setItem("user_type", "admin");
-        } else {
-          sessionStorage.setItem("admin_token", authToken);
-          sessionStorage.setItem("user_type", "admin");
-        }
-
-        console.log("✅ Connexion Admin réussie");
-        setLoading(false);
-        return; // IMPORTANT: Arrêter l'exécution ici si admin réussit
+        teamUtils.setAuthData(authToken, res.data.user, rememberMe, "admin");
+        
+        console.log("✅ Connexion admin réussie");
       } catch (adminError) {
-        // Vérifier si c'est une erreur d'authentification spécifique
         if (
           adminError.response?.status === 401 ||
           adminError.response?.status === 400
         ) {
-          console.log("Échec connexion admin, essai connexion équipe...");
-          // Continuer vers la connexion équipe
+          setError("Email ou mot de passe incorrect");
+        } else if (adminError.response?.status === 403) {
+          setError("Votre compte a été désactivé");
         } else {
-          // Autre type d'erreur (réseau, serveur, etc.)
-          console.error("Erreur admin:", adminError);
           setError(
             adminError.response?.data?.message ||
               "Erreur de connexion avec le serveur admin"
           );
-          setLoading(false);
-          return;
         }
-      }
-
-      // Essayer connexion équipe seulement si admin a échoué
-      try {
-        const teamRes = await teamService.login({
-          email,
-          password,
-        });
-
-        if (teamRes.success) {
-          const authToken = teamRes.data.token;
-          const userRole = teamRes.data.user.role;
-
-          setTeamToken(authToken);
-          setUserType(userRole);
-
-          // Stocker le token et le type d'utilisateur
-          if (rememberMe) {
-            localStorage.setItem("team_token", authToken);
-            localStorage.setItem("user_type", userRole);
-            localStorage.setItem(
-              "team_user",
-              JSON.stringify(teamRes.data.user)
-            );
-          } else {
-            sessionStorage.setItem("team_token", authToken);
-            sessionStorage.setItem("user_type", userRole);
-            sessionStorage.setItem(
-              "team_user",
-              JSON.stringify(teamRes.data.user)
-            );
-          }
-
-          console.log(`✅ Connexion ${userRole} réussie`);
-        } else {
-          setError("Identifiants incorrects pour l'équipe");
-        }
-      } catch (teamError) {
-        console.error("Erreur équipe:", teamError);
-        setError(
-          teamError.response?.data?.message || "Email ou mot de passe incorrect"
-        );
+        console.error("❌ Erreur connexion admin:", adminError.response?.data);
       }
     } catch (err) {
-      console.error("Erreur générale de connexion:", err);
       setError(
         err.response?.data?.message || "Une erreur inattendue est survenue"
       );
+      console.error("❌ Erreur générale:", err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    // Appeler l'API logout selon le type d'utilisateur
+    console.log(`🚪 Déconnexion de l'utilisateur: ${userType}`);
+    
     if (userType === "admin") {
-      const currentToken =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
+      const currentToken = teamUtils.getAuthToken("admin");
       if (currentToken) {
         axios
           .post(
@@ -142,26 +119,19 @@ const Login = () => {
               headers: { Authorization: `Bearer ${currentToken}` },
             }
           )
-          .catch(console.error);
+          .then(() => console.log("✅ Déconnexion admin réussie"))
+          .catch((err) => console.error("❌ Erreur déconnexion admin:", err));
       }
     } else {
-      const currentToken =
-        localStorage.getItem("team_token") ||
-        sessionStorage.getItem("team_token");
+      const currentToken = teamUtils.getAuthToken(userType?.toLowerCase());
       if (currentToken) {
-        teamService.logout().catch(console.error);
+        teamService.logout()
+          .then(() => console.log("✅ Déconnexion team réussie"))
+          .catch((err) => console.error("❌ Erreur déconnexion team:", err));
       }
     }
 
-    // Nettoyer le stockage local
-    localStorage.removeItem("admin_token");
-    localStorage.removeItem("team_token");
-    localStorage.removeItem("user_type");
-    localStorage.removeItem("team_user");
-    sessionStorage.removeItem("admin_token");
-    sessionStorage.removeItem("team_token");
-    sessionStorage.removeItem("user_type");
-    sessionStorage.removeItem("team_user");
+    teamUtils.logout(userType?.toLowerCase());
 
     setToken(null);
     setTeamToken(null);
@@ -170,15 +140,40 @@ const Login = () => {
     setPassword("");
   };
 
-  // Vérifier l'authentification au chargement
   useEffect(() => {
     const checkAuth = async () => {
-      const currentAdminToken =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const currentTeamToken =
-        localStorage.getItem("team_token") ||
-        sessionStorage.getItem("team_token");
+      console.log("🔍 Vérification de l'authentification...");
+
+      // ✅ Vérification des tokens Team
+      const possibleTeamRoles = ["agent", "investigateur", "admin"];
+      for (const role of possibleTeamRoles) {
+        const currentToken = teamUtils.getAuthToken(role);
+        const currentUserType =
+          localStorage.getItem("user_type") ||
+          sessionStorage.getItem("user_type");
+
+        if (
+          currentToken &&
+          currentUserType &&
+          currentUserType.toLowerCase() === role
+        ) {
+          try {
+            const res = await teamService.getCurrentUser();
+            if (res.success) {
+              console.log(`✅ Utilisateur ${role} authentifié`);
+              setTeamToken(currentToken);
+              setUserType(currentUserType);
+              return;
+            }
+          } catch (error) {
+            console.log(`❌ Token ${role} invalide, déconnexion...`);
+            teamUtils.logout(role);
+          }
+        }
+      }
+
+      // ✅ Vérification du token Admin
+      const currentAdminToken = teamUtils.getAuthToken("admin");
       const currentUserType =
         localStorage.getItem("user_type") ||
         sessionStorage.getItem("user_type");
@@ -187,34 +182,13 @@ const Login = () => {
         try {
           const res = await axios.get("/admin/check");
           if (res.data.authenticated) {
+            console.log("✅ Admin authentifié");
             setToken(currentAdminToken);
             setUserType("admin");
           }
         } catch (error) {
-          // Token invalide, nettoyer le stockage
-          localStorage.removeItem("admin_token");
-          localStorage.removeItem("user_type");
-          sessionStorage.removeItem("admin_token");
-          sessionStorage.removeItem("user_type");
-        }
-      } else if (
-        currentTeamToken &&
-        (currentUserType === "Agent" || currentUserType === "Investigateur")
-      ) {
-        try {
-          const res = await teamService.getCurrentUser();
-          if (res.success) {
-            setTeamToken(currentTeamToken);
-            setUserType(currentUserType);
-          }
-        } catch (error) {
-          // Token invalide, nettoyer le stockage
-          localStorage.removeItem("team_token");
-          localStorage.removeItem("user_type");
-          localStorage.removeItem("team_user");
-          sessionStorage.removeItem("team_token");
-          sessionStorage.removeItem("user_type");
-          sessionStorage.removeItem("team_user");
+          console.log("❌ Token admin invalide, déconnexion...");
+          teamUtils.logout("admin");
         }
       }
     };
@@ -222,19 +196,29 @@ const Login = () => {
     checkAuth();
   }, []);
 
-  // Afficher le dashboard approprié
-  if (userType === "admin" && token) {
+  useEffect(() => {
+    if (userType && teamToken) {
+      console.log(`🎯 Redirection vers le dashboard: ${userType}`);
+    }
+  }, [userType, teamToken]);
+
+  // ✅ Redirections vers les dashboards selon le type d'utilisateur
+  if (userType === "Admin" && teamUtils.getAuthToken("admin")) {
     return <DashboardAdmin onDeconnexion={handleLogout} />;
-  } else if (userType === "Agent" && teamToken) {
+  } else if (userType === "Agent" && teamUtils.getAuthToken("agent")) {
     return <DashboardAgent onDeconnexion={handleLogout} />;
-  } else if (userType === "Investigateur" && teamToken) {
+  } else if (
+    userType === "Investigateur" &&
+    teamUtils.getAuthToken("investigateur")
+  ) {
     return <DashboardInvestigation onDeconnexion={handleLogout} />;
+  } else if (userType === "admin" && teamUtils.getAuthToken("admin")) {
+    return <DashboardAdmin onDeconnexion={handleLogout} />;
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm border border-gray-200">
-        {/* En-tête */}
         <div className="text-center mb-6">
           <div className="mx-auto w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-3">
             <svg
@@ -258,7 +242,6 @@ const Login = () => {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
-          {/* Message d'erreur */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg flex items-center text-xs">
               <svg
@@ -276,7 +259,6 @@ const Login = () => {
             </div>
           )}
 
-          {/* Champ Email */}
           <div>
             <label className="block text-gray-700 text-xs font-semibold mb-1">
               Email
@@ -309,7 +291,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Champ Mot de passe */}
           <div>
             <label className="block text-gray-700 text-xs font-semibold mb-1">
               Mot de passe
@@ -324,7 +305,6 @@ const Login = () => {
                 required
                 disabled={loading}
               />
-              {/* Icône de cadenas */}
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg
                   className="w-4 h-4 text-gray-400"
@@ -340,7 +320,6 @@ const Login = () => {
                   />
                 </svg>
               </div>
-              {/* Bouton afficher/masquer le mot de passe */}
               <button
                 type="button"
                 onClick={togglePasswordVisibility}
@@ -386,7 +365,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Options supplémentaires */}
           <div className="flex items-center justify-between">
             <label className="flex items-center space-x-2 cursor-pointer">
               <div className="relative">
@@ -426,7 +404,6 @@ const Login = () => {
               </span>
             </label>
 
-            {/* Lien mot de passe oublié (optionnel) */}
             <button
               type="button"
               className="text-xs text-blue-600 hover:text-blue-800 font-medium transition duration-200"
@@ -436,7 +413,6 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Bouton de connexion */}
           <button
             type="submit"
             disabled={loading}
@@ -468,7 +444,6 @@ const Login = () => {
           </button>
         </form>
 
-        {/* Informations */}
         <div className="mt-6 pt-4 border-t border-gray-200">
           <div className="text-center text-xs text-gray-500 space-y-1">
             <p>

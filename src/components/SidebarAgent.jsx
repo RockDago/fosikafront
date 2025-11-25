@@ -1,14 +1,11 @@
 import React from "react";
 
-const Sidebar = ({ currentView, onViewChange, collapsed, onToggle }) => {
+const SidebarAgent = ({ currentView, onViewChange, collapsed, onToggle }) => {
   const menuItems = [
     { id: "dashboard", label: "Tableau de bord", icon: "📊" },
-    { id: "reports", label: "Gestion des Signalements", icon: "📋" },
-    // { id: "analyse", label: "Analyse & Reporting", icon: "📈" },
-    // { id: "rapports", label: "Rapports", icon: "📑" },
-    { id: "equipe", label: "Utilisateurs", icon: "👥" },
-    { id: "audit", label: "Log / Audit", icon: "📖" },
+    { id: "signalements", label: "Gestion de Signalements", icon: "📋" },
     // { id: "notifications", label: "Notifications", icon: "🔔" },
+    // { id: "profil", label: "Mon Profil", icon: "👤" },
   ];
 
   return (
@@ -17,10 +14,12 @@ const Sidebar = ({ currentView, onViewChange, collapsed, onToggle }) => {
         collapsed ? "w-16" : "w-64"
       }`}
     >
-      {/* Header du sidebar avec toggle en haut à droite */}
+      {/* Header du sidebar avec toggle */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 h-12">
         {!collapsed && (
-          <h2 className="text-base font-semibold text-gray-800 text-center flex-1">Menu</h2>
+          <h2 className="text-base font-semibold text-gray-800 text-center flex-1">
+            Menu Agent
+          </h2>
         )}
         <button
           onClick={onToggle}
@@ -57,14 +56,16 @@ const Sidebar = ({ currentView, onViewChange, collapsed, onToggle }) => {
             onClick={() => onViewChange(item.id)}
             className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors mb-1 ${
               currentView === item.id
-                ? "bg-blue-50 text-blue-600 border border-blue-200"
+                ? "bg-green-50 text-green-600 border border-green-200"
                 : "text-gray-600 hover:bg-gray-50"
             }`}
             title={collapsed ? item.label : ""}
           >
             <span className="text-base flex-shrink-0">{item.icon}</span>
             {!collapsed && (
-              <span className="font-medium text-left text-sm">{item.label}</span>
+              <span className="font-medium text-left text-sm">
+                {item.label}
+              </span>
             )}
           </button>
         ))}
@@ -73,4 +74,4 @@ const Sidebar = ({ currentView, onViewChange, collapsed, onToggle }) => {
   );
 };
 
-export default Sidebar;
+export default SidebarAgent;

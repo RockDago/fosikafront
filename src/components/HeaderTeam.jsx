@@ -8,25 +8,53 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-const Header = ({
+const HeaderTeam = ({
   onNavigateToNotifications,
   onDeconnexion,
   onNavigateToProfile,
-  adminData,
+  userData,
   onAvatarUpdate,
+  userRole, // 'admin', 'agent', 'investigateur'
 }) => {
   const [notificationDropdownOpen, setNotificationDropdownOpen] =
     useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [localAdminData, setLocalAdminData] = useState(null);
+  const [localUserData, setLocalUserData] = useState(null);
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Couleurs par rôle
+  const roleColors = {
+    admin: {
+      bg: "bg-blue-600",
+      text: "text-blue-600",
+      light: "bg-blue-50",
+      border: "border-blue-200",
+      badge: "bg-blue-100 text-blue-800",
+    },
+    agent: {
+      bg: "bg-green-600",
+      text: "text-green-600",
+      light: "bg-green-50",
+      border: "border-green-200",
+      badge: "bg-green-100 text-green-800",
+    },
+    investigateur: {
+      bg: "bg-purple-600",
+      text: "text-purple-600",
+      light: "bg-purple-50",
+      border: "border-purple-200",
+      badge: "bg-purple-100 text-purple-800",
+    },
+  };
+
+  const currentRole = roleColors[userRole] || roleColors.admin;
+
   useEffect(() => {
-    fetchAdminData();
-  }, [adminData, avatarVersion]);
+    fetchUserProfile();
+  }, [userData, avatarVersion]);
 
   useEffect(() => {
     fetchRecentNotifications();
@@ -37,8 +65,8 @@ const Header = ({
   const fetchRecentNotifications = async () => {
     try {
       const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
+        localStorage.getItem(`${userRole}_token`) ||
+        sessionStorage.getItem(`${userRole}_token`);
       if (!token) return;
 
       const response = await fetch(
@@ -68,8 +96,8 @@ const Header = ({
   const markNotificationAsRead = async (notificationId) => {
     try {
       const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
+        localStorage.getItem(`${userRole}_token`) ||
+        sessionStorage.getItem(`${userRole}_token`);
       const response = await fetch(
         `http://localhost:8000/api/notifications/${notificationId}/read`,
         {
@@ -94,29 +122,42 @@ const Header = ({
     }
   };
 
-  const fetchAdminData = async () => {
+  const fetchUserProfile = async () => {
     try {
       const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
+        localStorage.getItem(`${userRole}_token`) ||
+        sessionStorage.getItem(`${userRole}_token`);
       if (!token) return;
 
-      const response = await fetch("http://localhost:8000/api/admin/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-cache",
-      });
+      console.log("🔄 Fetching user profile for header...");
+
+      const response = await fetch(
+        `http://localhost:8000/api/${userRole}/profile`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          cache: "no-cache",
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setLocalAdminData(data.data);
+          console.log("✅ Profile data loaded for header:", data.data);
+          setLocalUserData(data.data);
+
+          // Notifier le parent si l'avatar a changé
+          if (onAvatarUpdate && data.data.avatar) {
+            onAvatarUpdate(data.data.avatar);
+          }
         }
+      } else {
+        console.error("❌ Failed to fetch profile:", response.status);
       }
     } catch (error) {
-      console.error("Error loading admin data:", error);
+      console.error(`Error loading ${userRole} profile:`, error);
     }
   };
 
@@ -157,21 +198,49 @@ const Header = ({
   };
 
   const getInitials = () => {
-    const data = localAdminData || adminData;
-    if (!data) return "A";
+    const data = localUserData || userData;
+    if (!data) return userRole.charAt(0).toUpperCase();
 
-    if (data.first_name && data.last_name) {
-      return `${data.first_name[0]}${data.last_name[0]}`.toUpperCase();
-    }
-    return data.name ? data.name.substring(0, 2).toUpperCase() : "A";
+    // Utiliser le nom complet pour les initiales
+    return data.name
+      ? data.name.substring(0, 2).toUpperCase()
+      : userRole.charAt(0).toUpperCase();
   };
 
   const getAvatarUrl = () => {
-    const data = localAdminData || adminData;
+    const data = localUserData || userData;
     if (!data?.avatar) return null;
 
-    const separator = data.avatar.includes("?") ? "&" : "?";
-    return `${data.avatar}${separator}t=${Date.now()}`;
+    // Ajouter un timestamp pour éviter le cache
+    let avatarUrl = data.avatar;
+    if (!avatarUrl.includes("http")) {
+      // Si c'est un chemin relatif, ajouter l'URL de base
+      avatarUrl = `http://localhost:8000${
+        avatarUrl.startsWith("/") ? "" : "/"
+      }${avatarUrl}`;
+    }
+
+    const separator = avatarUrl.includes("?") ? "&" : "?";
+    return `${avatarUrl}${separator}v=${avatarVersion}`;
+  };
+
+  const getRoleLabel = () => {
+    const labels = {
+      admin: "Administrateur",
+      agent: "Agent",
+      investigateur: "Investigateur",
+    };
+    return labels[userRole] || "Utilisateur";
+  };
+
+  const getDisplayName = () => {
+    const data = localUserData || userData;
+    return data?.name || getRoleLabel();
+  };
+
+  const getDisplayEmail = () => {
+    const data = localUserData || userData;
+    return data?.email || `${userRole}@fosika.gov`;
   };
 
   const handleLogout = () => {
@@ -197,33 +266,48 @@ const Header = ({
   const handleViewAllNotifications = () => {
     setNotificationDropdownOpen(false);
     if (onNavigateToNotifications) {
-      // Passer un objet vide pour indiquer qu'on veut la liste
       onNavigateToNotifications({ view: "list" });
+    } else {
+      console.warn("onNavigateToNotifications n'est pas défini");
+      // Fallback: redirection vers une page de notifications
+      alert(
+        "Page des notifications - Fonctionnalité en cours de développement"
+      );
     }
   };
 
   const handleNotificationClick = async (notification) => {
-    // Marquer comme lu si nécessaire
     if (notification.status === "active") {
       await markNotificationAsRead(notification.id);
     }
 
     setNotificationDropdownOpen(false);
     if (onNavigateToNotifications) {
-      // Passer la notification pour ouvrir directement le détail
       onNavigateToNotifications({
         view: "detail",
         notification: notification,
       });
+    } else {
+      console.warn("onNavigateToNotifications n'est pas défini");
+      // Fallback
+      alert(`Détail de la notification: ${notification.titre}`);
     }
   };
 
   const handleAvatarError = (e) => {
-    console.error("Avatar image failed to load");
+    console.error("Avatar image failed to load, using initials");
+    e.target.style.display = "none";
+    // Forcer le re-render pour afficher les initiales
+    setAvatarVersion((prev) => prev + 1);
+  };
+
+  const handleAvatarLoad = (e) => {
+    console.log("Avatar loaded successfully");
   };
 
   const avatarUrl = getAvatarUrl();
-  const displayData = localAdminData || adminData;
+  const displayName = getDisplayName();
+  const displayEmail = getDisplayEmail();
 
   return (
     <>
@@ -268,7 +352,7 @@ const Header = ({
                       key={notification.id}
                       className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
                         notification.status === "active"
-                          ? "bg-blue-50 border-l-2 border-l-blue-500"
+                          ? `${currentRole.light} border-l-2 ${currentRole.border}`
                           : ""
                       }`}
                       onClick={() => handleNotificationClick(notification)}
@@ -283,7 +367,9 @@ const Header = ({
                               {notification.titre}
                             </div>
                             {notification.status === "active" && (
-                              <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
+                              <span
+                                className={`w-2 h-2 ${currentRole.bg} rounded-full flex-shrink-0 mt-1`}
+                              ></span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600 mb-1 line-clamp-2">
@@ -323,24 +409,35 @@ const Header = ({
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
               className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative">
+              <div
+                className={`w-10 h-10 ${currentRole.bg} rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative`}
+              >
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Avatar"
                     className="w-full h-full object-cover"
                     onError={handleAvatarError}
-                    key={avatarVersion}
+                    onLoad={handleAvatarLoad}
+                    key={`avatar-${avatarVersion}`}
                   />
-                ) : (
-                  <span className="flex items-center justify-center w-full h-full">
-                    {getInitials()}
-                  </span>
-                )}
+                ) : null}
+                <span
+                  className={`flex items-center justify-center w-full h-full ${
+                    avatarUrl ? "hidden" : ""
+                  }`}
+                >
+                  {getInitials()}
+                </span>
               </div>
-              <span className="text-sm font-medium text-gray-700">
-                {displayData?.name || "Admin"}
-              </span>
+              <div className="text-left">
+                <span className="text-sm font-medium text-gray-700 block">
+                  {displayName}
+                </span>
+                <span className="text-xs text-gray-500 block">
+                  {displayEmail}
+                </span>
+              </div>
               <ChevronDown className="w-4 h-4 text-gray-500" />
             </button>
 
@@ -399,4 +496,4 @@ const Header = ({
   );
 };
 
-export default Header;
+export default HeaderTeam;

@@ -1,103 +1,219 @@
 import axios from "axios";
 
-// Instance Axios
+// ✅ Configuration automatique de l'URL de base
+const BASE_URL =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8000/api" // 👉 Développement local
+    : "http://fosika.mesupres.edu.mg/api"; // 👉 Production
+
+console.log(`🚀 Configuration Axios - URL de base: ${BASE_URL}`);
+
+// Instance Axios avec configuration corrigée
 const instance = axios.create({
-  baseURL: "http://localhost:8000/api",
-  timeout: 30000, // Augmenter le timeout
+  baseURL: BASE_URL, // 👈 ICI on utilise la variable dynamique
+  timeout: 10000,
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
   },
+  withCredentials: false,
 });
 
-// Récupérer token admin ou team
-const getAuthData = () => {
-  const adminToken =
-    localStorage.getItem("admin_token") ||
-    sessionStorage.getItem("admin_token");
-  const teamToken =
-    localStorage.getItem("team_token") || sessionStorage.getItem("team_token");
-  return { adminToken, teamToken };
-};
+// --- Gestion des tokens pour Admin ET Team ---
 
-// Stocker token
-export const setAuthData = (role, token, rememberMe = false) => {
-  if (role === "admin") {
-    if (rememberMe) localStorage.setItem("admin_token", token);
-    else sessionStorage.setItem("admin_token", token);
-  } else {
-    if (rememberMe) localStorage.setItem("team_token", token);
-    else sessionStorage.setItem("team_token", token);
-  }
-};
-
-// Supprimer token
-export const clearAuthData = () => {
-  localStorage.removeItem("admin_token");
-  localStorage.removeItem("team_token");
-  localStorage.removeItem("user_type");
-  localStorage.removeItem("team_user");
-  sessionStorage.removeItem("admin_token");
-  sessionStorage.removeItem("team_token");
-  sessionStorage.removeItem("user_type");
-  sessionStorage.removeItem("team_user");
-};
-
-// Intercepteur pour ajouter token si existant
+// Dans votre fichier axios.js, ajoutez cette vérification
 instance.interceptors.request.use(
   (config) => {
-    const { adminToken, teamToken } = getAuthData();
-    const token = adminToken || teamToken;
+    // Ne pas envoyer de requêtes /admin/* si l'utilisateur est un team admin
+    const userType =
+      localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log("🔑 Token utilisé dans la requête");
-    } else {
-      console.log("👤 Aucun token, requête en tant que visiteur");
+    if (
+      userType === "Admin" &&
+      config.url.includes("/admin/") &&
+      !config.url.includes("/admin/check")
+    ) {
+      console.log("🚫 Blocage requête admin pour team admin:", config.url);
+      return Promise.reject(new Error("Accès non autorisé à cette ressource"));
     }
 
     return config;
   },
   (error) => {
-    console.error("❌ Erreur intercepteur requête:", error);
     return Promise.reject(error);
   }
 );
 
-// Intercepteur pour gérer les erreurs
+// Récupérer le token selon le type d'utilisateur
+const getAuthToken = () => {
+  const teamToken =
+    localStorage.getItem("team_token") || sessionStorage.getItem("team_token");
+  if (teamToken) {
+    return { token: teamToken, type: "team" };
+  }
+
+  const adminToken =
+    localStorage.getItem("admin_token") ||
+    sessionStorage.getItem("admin_token");
+  if (adminToken) {
+    return { token: adminToken, type: "admin" };
+  }
+
+  return null;
+};
+
+// Stocker token admin
+export const setAdminAuthData = (token, rememberMe = false) => {
+  if (rememberMe) {
+    localStorage.setItem("admin_token", token);
+    localStorage.setItem("user_type", "admin");
+    localStorage.removeItem("team_token");
+    sessionStorage.removeItem("team_token");
+  } else {
+    sessionStorage.setItem("admin_token", token);
+    sessionStorage.setItem("user_type", "admin");
+    localStorage.removeItem("team_token");
+    sessionStorage.removeItem("team_token");
+  }
+};
+
+// Stocker token team
+export const setTeamAuthData = (token, rememberMe = false) => {
+  if (rememberMe) {
+    localStorage.setItem("team_token", token);
+    localStorage.setItem("user_type", "team");
+    localStorage.removeItem("admin_token");
+    sessionStorage.removeItem("admin_token");
+  } else {
+    sessionStorage.setItem("team_token", token);
+    sessionStorage.setItem("user_type", "team");
+    localStorage.removeItem("admin_token");
+    sessionStorage.removeItem("admin_token");
+  }
+};
+
+// Supprimer tous les tokens
+export const clearAuthData = () => {
+  // Nettoyer admin
+  localStorage.removeItem("admin_token");
+  localStorage.removeItem("user_type");
+  sessionStorage.removeItem("admin_token");
+  sessionStorage.removeItem("user_type");
+
+  // Nettoyer team
+  localStorage.removeItem("team_token");
+  sessionStorage.removeItem("team_token");
+};
+
+// Supprimer uniquement les tokens team
+export const clearTeamAuthData = () => {
+  localStorage.removeItem("team_token");
+  sessionStorage.removeItem("team_token");
+  localStorage.removeItem("user_type");
+  sessionStorage.removeItem("user_type");
+};
+
+// Supprimer uniquement les tokens admin
+export const clearAdminAuthData = () => {
+  localStorage.removeItem("admin_token");
+  sessionStorage.removeItem("admin_token");
+  localStorage.removeItem("user_type");
+  sessionStorage.removeItem("user_type");
+};
+
+// Vérifier le type d'utilisateur connecté
+export const getUserType = () => {
+  return (
+    localStorage.getItem("user_type") ||
+    sessionStorage.getItem("user_type") ||
+    null
+  );
+};
+
+// --- Intercepteur pour ajouter le token Bearer ---
+instance.interceptors.request.use(
+  (config) => {
+    const authData = getAuthToken();
+
+    if (authData) {
+      config.headers.Authorization = `Bearer ${authData.token}`;
+      console.log(
+        `🔑 Token ${
+          authData.type
+        } utilisé pour: ${config.method?.toUpperCase()} ${config.url}`
+      );
+    } else {
+      console.log(
+        `👤 Aucun token pour: ${config.method?.toUpperCase()} ${config.url}`
+      );
+    }
+
+    return config;
+  },
+  (error) => {
+    console.error("❌ Erreur intercepteur request:", error);
+    return Promise.reject(error);
+  }
+);
+
+// --- Intercepteur pour gérer les erreurs - CORRIGÉ AVEC GESTION COMPTE DÉSACTIVÉ ---
 instance.interceptors.response.use(
   (response) => {
     console.log(
-      `✅ ${response.config.method?.toUpperCase()} ${response.config.url}:`,
-      response.status
+      `✅ ${response.config.method?.toUpperCase()} ${
+        response.config.url
+      } - Succès`
     );
     return response;
   },
   (error) => {
-    if (error.response) {
+    if (error.code === "ERR_NETWORK") {
       console.error(
-        `❌ Erreur ${error.config?.method?.toUpperCase()} ${
-          error.config?.url
-        }:`,
-        error.response.status,
+        `🌐 Erreur réseau: Le serveur backend n'est pas accessible à ${BASE_URL}`
+      );
+      console.error(
+        "Vérifiez que le serveur Laravel est démarré et accessible"
+      );
+    } else if (error.response) {
+      console.error(
+        `❌ Erreur ${error.response.status} sur ${error.config?.url}:`,
         error.response.data
       );
 
-      // Si non authentifié, on peut nettoyer les tokens
       if (error.response.status === 401) {
-        console.log("🔒 Session expirée, nettoyage des tokens...");
+        console.log("🔒 401 - Session expirée ou non autorisée");
+        console.log("📍 Nettoyage des tokens sans redirection automatique");
         clearAuthData();
-        // Rediriger vers la page de login si nécessaire
-        window.dispatchEvent(new Event("sessionExpired"));
+      } else if (error.response.status === 403) {
+        console.log("🚫 403 - Accès refusé (compte désactivé)");
+
+        // Gestion spécifique pour les comptes désactivés
+        if (error.response.data?.message?.includes("désactivé")) {
+          console.log("🚫 COMPTE DÉSACTIVÉ - Déconnexion automatique");
+          clearAuthData();
+
+          // Déclencher un événement global pour informer l'application
+          window.dispatchEvent(
+            new CustomEvent("accountDisabled", {
+              detail: error.response.data,
+            })
+          );
+        }
+      } else if (error.response.status === 404) {
+        console.warn(`🔍 404 - Endpoint non trouvé: ${error.config?.url}`);
+      } else if (error.response.status === 422) {
+        console.warn(
+          "📝 422 - Erreur de validation:",
+          error.response.data.errors
+        );
+      } else if (error.response.status === 500) {
+        console.error("💥 500 - Erreur serveur interne:", error.response.data);
       }
     } else if (error.request) {
-      console.error("🌐 Erreur réseau - Requête envoyée mais pas de réponse:", {
-        url: error.config?.url,
-        method: error.config?.method,
-        timeout: error.config?.timeout,
-      });
+      console.error("🌐 Aucune réponse reçue:", error.request);
     } else {
-      console.error("⚡ Erreur de configuration Axios:", error.message);
+      console.error("⚠️ Erreur Axios:", error.message);
     }
 
     return Promise.reject(error);

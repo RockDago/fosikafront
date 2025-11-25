@@ -1,39 +1,35 @@
+// DashboardInvest.jsx
 import React, { useState, useEffect } from "react";
 import HeaderTeam from "./HeaderTeam";
-import SidebarAgent from "./SidebarAgent";
-import DashboardView from "./views/DashboardView"; // Changer DashboardAgentView par DashboardView
-import ReportsView from "./views/ReportsView";
-import ActivitesView from "./views/ActivitesView";
-import ProfileTeam from "./ProfileTeam";
+import SidebarInvest from "./SidebarInvest";
+import DashboardInvestView from "./views/DashboardInvestView";
+import EnquetesView from "./views/EnquetesView";
 import NotificationsView from "./views/NotificationsView";
+import ProfileTeam from "./ProfileTeam";
 import { teamUtils } from "../api/teamAPI";
 
-const DashboardAgent = ({ onDeconnexion }) => {
+const DashboardInvest = ({ onDeconnexion }) => {
   const [data, setData] = useState(null);
   const [currentView, setCurrentView] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [agentData, setAgentData] = useState(null);
+  const [investData, setInvestData] = useState(null);
   const [avatarUpdated, setAvatarUpdated] = useState(0);
   const [headerAvatarUpdate, setHeaderAvatarUpdate] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [notificationParams, setNotificationParams] = useState(null);
 
   // Vérifier l'authentification au chargement
   useEffect(() => {
     const checkAuth = () => {
-      const token = teamUtils.getAuthToken("agent");
+      const token = teamUtils.getAuthToken("investigateur");
       console.log(
-        "🔐 Dashboard Agent - Token check:",
+        "🔐 Dashboard Investigateur - Token check:",
         token ? "PRESENT" : "ABSENT"
       );
       console.log("📦 Storage state:", {
-        agent_token:
-          localStorage.getItem("agent_token") ||
-          sessionStorage.getItem("agent_token"),
-        team_token:
-          localStorage.getItem("team_token") ||
-          sessionStorage.getItem("team_token"),
+        investigateur_token:
+          localStorage.getItem("investigateur_token") ||
+          sessionStorage.getItem("investigateur_token"),
         user_type:
           localStorage.getItem("user_type") ||
           sessionStorage.getItem("user_type"),
@@ -54,10 +50,10 @@ const DashboardAgent = ({ onDeconnexion }) => {
     checkAuth();
   }, []);
 
-  // Charger les données de l'agent si authentifié
+  // Charger les données de l'investigateur si authentifié
   useEffect(() => {
     if (isAuthenticated) {
-      fetchAgentData();
+      fetchInvestData();
     }
   }, [isAuthenticated, avatarUpdated]);
 
@@ -66,7 +62,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
     if (!isAuthenticated) return;
 
     const checkSession = async () => {
-      const token = teamUtils.getAuthToken("agent");
+      const token = teamUtils.getAuthToken("investigateur");
       if (!token) {
         console.log("🔒 Token manquant pendant la vérification");
         handleSessionExpired();
@@ -75,7 +71,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
 
       try {
         const response = await fetch(
-          "http://localhost:8000/api/agent/profile",
+          "http://localhost:8000/api/investigateur/profile",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -99,31 +95,37 @@ const DashboardAgent = ({ onDeconnexion }) => {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  const fetchAgentData = async () => {
-    const token = teamUtils.getAuthToken("agent");
+  const fetchInvestData = async () => {
+    const token = teamUtils.getAuthToken("investigateur");
     if (!token) {
-      console.error("❌ Dashboard Agent: No token available for fetch");
+      console.error("❌ Dashboard Investigateur: No token available for fetch");
       handleSessionExpired();
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log("🔄 Dashboard Agent: Fetching agent data...");
+      console.log("🔄 Dashboard Investigateur: Fetching investigateur data...");
 
-      const response = await fetch("http://localhost:8000/api/agent/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
+      const response = await fetch(
+        "http://localhost:8000/api/investigateur/profile",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
 
       if (response.ok) {
         const result = await response.json();
-        console.log("✅ Dashboard Agent: Agent data received:", result);
+        console.log(
+          "✅ Dashboard Investigateur: Investigateur data received:",
+          result
+        );
 
         if (result.success) {
-          setAgentData(result.data);
+          setInvestData(result.data);
           setData(result.data);
         } else {
           console.error("❌ API returned error:", result.message);
@@ -135,7 +137,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
         console.error("❌ HTTP Error:", response.status);
       }
     } catch (error) {
-      console.error("❌ Dashboard Agent: Network error:", error);
+      console.error("❌ Dashboard Investigateur: Network error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +147,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
     console.log("🚨 Session expirée - Déconnexion...");
 
     // Nettoyer le stockage
-    teamUtils.logout("agent");
+    teamUtils.logout("investigateur");
     setIsAuthenticated(false);
 
     // Afficher une alerte
@@ -170,25 +172,14 @@ const DashboardAgent = ({ onDeconnexion }) => {
   const handleHeaderAvatarUpdate = () => {
     console.log("🔄 Avatar updated in Header");
     setHeaderAvatarUpdate((prev) => prev + 1);
-    fetchAgentData();
-  };
-
-  const handleNavigateToProfile = () => {
-    console.log("📍 Navigation vers le profil");
-    setCurrentView("profil");
-  };
-
-  const handleNavigateToNotifications = (params) => {
-    console.log("📍 Navigation vers les notifications:", params);
-    setNotificationParams(params);
-    setCurrentView("notifications");
+    fetchInvestData();
   };
 
   const renderView = () => {
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
         </div>
       );
     }
@@ -197,36 +188,28 @@ const DashboardAgent = ({ onDeconnexion }) => {
 
     switch (currentView) {
       case "dashboard":
-        return <DashboardView data={displayData} />; // Utiliser DashboardView
-      case "signalements":
-        return <ReportsView data={displayData} />;
-      case "rapports":
-        return (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Rapports</h2>
-            <p className="text-gray-600">
-              Module rapports en cours de développement...
-            </p>
-          </div>
-        );
+        return <DashboardInvestView data={displayData} />;
+      case "enquetes":
+        return <EnquetesView />;
       case "notifications":
-        return (
-          <NotificationsView data={displayData} params={notificationParams} />
-        );
-      case "activites":
-        return <ActivitesView data={displayData} />;
+        return <NotificationsView />;
       case "profil":
         return (
           <ProfileTeam
             onReturnToDashboard={() => setCurrentView("dashboard")}
             onAvatarUpdate={handleAvatarUpdate}
-            userRole="agent"
-            userData={agentData}
+            userRole="investigateur"
+            userData={investData}
           />
         );
       default:
-        return <DashboardView data={displayData} />; // Utiliser DashboardView
+        return <DashboardInvestView data={displayData} />;
     }
+  };
+
+  const handleNavigateToProfile = () => {
+    console.log("📍 Navigation vers le profil");
+    setCurrentView("profil");
   };
 
   // Si non authentifié, afficher un message d'erreur
@@ -259,7 +242,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
             </p>
             <button
               onClick={() => (window.location.href = "/login")}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              className="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
             >
               Se connecter à nouveau
             </button>
@@ -274,14 +257,13 @@ const DashboardAgent = ({ onDeconnexion }) => {
       <HeaderTeam
         onNavigateToProfile={handleNavigateToProfile}
         onDeconnexion={onDeconnexion}
-        userData={agentData}
-        onAvatarUpdate={handleHeaderAvatarUpdate}
-        userRole="agent"
-        onNavigateToNotifications={handleNavigateToNotifications}
+        userData={investData}
+        onAvatarUpdate={headerAvatarUpdate}
+        userRole="investigateur"
       />
 
       <div className="flex pt-20">
-        <SidebarAgent
+        <SidebarInvest
           currentView={currentView}
           onViewChange={setCurrentView}
           collapsed={sidebarCollapsed}
@@ -300,4 +282,4 @@ const DashboardAgent = ({ onDeconnexion }) => {
   );
 };
 
-export default DashboardAgent;
+export default DashboardInvest;
