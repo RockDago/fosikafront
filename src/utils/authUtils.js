@@ -1,23 +1,54 @@
 // utils/authUtils.js
+
 export const authUtils = {
+  // Sauvegarde token + type user (admin)
+  saveToken: (token, remember = false) => {
+    if (remember) {
+      localStorage.setItem("admin_token", token);
+      localStorage.setItem("user_type", "admin");
+    } else {
+      sessionStorage.setItem("admin_token", token);
+      sessionStorage.setItem("user_type", "admin");
+    }
+  },
+
+  // Récupère le token depuis localStorage ou sessionStorage
   getToken: () => {
-    return localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token');
+    return (
+      localStorage.getItem("admin_token") ||
+      sessionStorage.getItem("admin_token") ||
+      null
+    );
   },
-  
+
+  // Vérifie l'authentification
   isAuthenticated: () => {
-    return !!(localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token'));
+    const token =
+      localStorage.getItem("admin_token") ||
+      sessionStorage.getItem("admin_token");
+
+    const userType =
+      localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
+
+    // doit être admin + avoir un token
+    return !!token && userType === "admin";
   },
-  
+
+  // Déconnexion propre
   logout: () => {
-    localStorage.removeItem('admin_token');
-    sessionStorage.removeItem('admin_token');
-    localStorage.removeItem('user_type');
-    sessionStorage.removeItem('user_type');
-    window.location.href = '/login';
+    localStorage.removeItem("admin_token");
+    sessionStorage.removeItem("admin_token");
+
+    localStorage.removeItem("user_type");
+    sessionStorage.removeItem("user_type");
+
+    window.location.href = "/login";
   },
-  
-  // Nouvelle méthode pour obtenir le type de stockage
+
+  // Indique le type de stockage utilisé (utile pour remember-me)
   getStorageType: () => {
-    return localStorage.getItem('admin_token') ? 'local' : 'session';
-  }
+    if (localStorage.getItem("admin_token")) return "local";
+    if (sessionStorage.getItem("admin_token")) return "session";
+    return null;
+  },
 };

@@ -33,7 +33,7 @@ const translations = {
         "Cette initiative permet de signaler en toute confidentialité tout cas de :",
       cases: [
         "Faux diplômes utilisés lors des recrutements,",
-        "Faux diplômes dans le but d'obtenir la validation d'une candidature ou une évolution dans la carrière professionnelle,",
+        "Faux diplômes dans le but d'obtenir la validation d'une candidature ou une évolution dans une carrière professionnelle,",
         "Diplômes et attestations falsifiés.",
       ],
       contribute: "Par vos signalements, vous contribuez à :",
@@ -100,7 +100,8 @@ const translations = {
     },
     categories: {
       "Faux-diplomes": "Faux diplômes",
-      "Fraudes-academique": "Fraudes académiques",
+      "Offre de formation irrégulière ( non habilité)":
+        "Offre de formation irrégulière ( non habilité)",
       "Fecrutements-irreguliers": "Recrutements irréguliers",
       harcelement: "Harcèlement",
       corruption: "Corruption",
@@ -126,7 +127,7 @@ const translations = {
       title:
         "Tongasoa eto amin'ny tambajotra nasionaly miady amin'ny trangana HOSOKA sy DIPLAOMA Sandoka - \"FOSIKA\"",
       subtitle:
-        "Eo ambany fiahian'ny Ministeran'ny Fampianarana Ambony sy Fikarohana Ara-tsiansa (MESUPRES), sy ny fiaraha-miasa amin'ny Birao Mahaleo-tena Miady amin'ny Kolikoly \"BIANCO\", dia tafiditra ao anatin'ny ezaka nasionaly hanadiovana ny rafi-pampianarana ambony sy hamerenana ny fitokisan'ny vahoaka ny Tambanjotra \"FOSIKA.mg\".",
+        "Eo ambany fiahian'ny Ministeran'ny Fampianarana Ambony sy Fikarohana Ara-tsiansa (MESUPRES), sy ny fiaraha-miasa amin'ny Birao Mahaleo-tena Miady amin'ny Kolikoly \"BIANCO\", dia tafiditra ao anatin'ny ezaka nasionaly hanadiovana ny rafi-pampianarana ambony sy hamerenana ny fitokisan'ny vahoaka ny Tambanjotra \"FOSIKA\".",
       initiative:
         "Ity sehatra ity dia natao ahafahana manangom-baovao am-fitokisana momba ireto tranga manaraka ireto :",
       cases: [
@@ -200,7 +201,8 @@ const translations = {
     },
     categories: {
       "faux-diplomes": "Diplaoma sandoka",
-      "fraudes-academique": "Hosoka ara-pianarana",
+      "Offre de formation irrégulière ( non habilité)":
+        "Tolotra fiofanana tsy ara-dalàna (tsy nahazoana alalana)",
       "recrutements-irreguliers": "Fampidirana mpiasa tsy ara-dalàna",
       harcelement: "Fanararaotana",
       corruption: "Kolikoly",
@@ -229,14 +231,14 @@ const generateReference = () => {
   const random = Math.random().toString(36).substr(2, 5).toUpperCase();
   return `FOS-${timestamp}-${random}`;
 };
-
-// Composant Page d'accueil avec alignement vertical corrigé
+// Composant Page d'accueil avec design responsive - Desktop inchangé
 const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
   const t = translations[language];
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
 
   return (
     <div className="bg-white min-h-screen flex flex-col items-center p-4 font-inter overflow-x-hidden">
-      {/* En-tête avec logos - ALIGNEMENT VERTICAL CORRIGÉ */}
+      {/* En-tête avec logos - EXACTEMENT COMME AVANT */}
       <div className="w-full max-w-3xl mx-auto mb-3">
         <div className="w-full flex items-center justify-center bg-white p-3 rounded-lg">
           <div className="flex items-center justify-center space-x-4">
@@ -259,7 +261,7 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
             {/* Bloc texte avec alignement vertical corrigé */}
             <div className="flex flex-col justify-center space-y-1">
               {/* Texte 1 - Logo République - REMONTÉ */}
-              <span className="font-semibold text-sm uppercase leading-tight  p-2">
+              <span className="font-semibold text-sm uppercase leading-tight p-2">
                 Repoblikan'i Madagasikara
               </span>
 
@@ -274,14 +276,15 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
         </div>
       </div>
 
-      {/* Le reste du code reste inchangé */}
-      <div className="relative w-full max-w-6xl overflow-hidden">
-        {/* Cadre vert principal sans arrondi */}
+      {/* Cadre vert principal - HAUTEUR PLEINE ÉCRAN SUR MOBILE */}
+      <div className="relative w-full max-w-6xl flex-1 min-h-[70vh] md:min-h-0">
+        {/* Cadre vert principal sans arrondi - ORIGINAL */}
         <div className="absolute inset-0 border-4 border-[#b3d088] bg-[#f9faf7] z-0"></div>
 
-        {/* Menu de langue - UNIQUEMENT SUR CETTE PAGE - Style ancien sans fond, taille réduite */}
+        {/* Menu de langue responsive */}
         <div className="absolute top-4 right-4 z-50">
-          <div>
+          {/* Version desktop - EXACTEMENT COMME AVANT */}
+          <div className="hidden md:block">
             <div className="text-center font-semibold text-gray-800 mb-2 text-xs">
               {language === "fr" ? "Choisir la langue" : "Safidio ny fiteny"}
             </div>
@@ -314,100 +317,187 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
               </button>
             </div>
           </div>
+
+          {/* Version mobile/tablette - SEULEMENT EN DESSOUS DE md */}
+          <div className="md:hidden relative">
+            {/* Bouton des 3 points */}
+            <button
+              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+              className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              <svg
+                className="w-4 h-4 text-gray-600"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="6" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="12" cy="18" r="1.5" />
+              </svg>
+            </button>
+
+            {/* Menu modal */}
+            {isLangMenuOpen && (
+              <>
+                {/* Overlay pour fermer en cliquant à côté */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsLangMenuOpen(false)}
+                />
+
+                <div className="absolute right-0 top-10 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[140px]">
+                  <div className="text-xs font-semibold text-gray-800 mb-2 text-center">
+                    {language === "fr" ? "Langue" : "Fiteny"}
+                  </div>
+
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setLanguage("mg");
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`flex items-center gap-2 w-full p-2 rounded transition-colors ${
+                        language === "mg"
+                          ? "bg-green-50 text-green-700"
+                          : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <img
+                        src={DrapeauMalagasy}
+                        alt="Malagasy"
+                        className="w-5 h-5 rounded-full border border-gray-300"
+                      />
+                      <span className="text-xs font-medium">Malagasy</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setLanguage("fr");
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`flex items-center gap-2 w-full p-2 rounded transition-colors ${
+                        language === "fr"
+                          ? "bg-blue-50 text-blue-700"
+                          : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <img
+                        src={DrapeauFrancais}
+                        alt="Français"
+                        className="w-5 h-5 rounded-full border border-gray-300"
+                      />
+                      <span className="text-xs font-medium">Français</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Contenu principal */}
-        <div className="relative z-10 p-8 md:p-12 pt-12 md:pt-16">
-          {/* Bonjour cher visiteur avec Logo Fosika centré */}
-          <div className="relative mb-6 -mt-2 md:-mt-4">
-            {/* Bonjour cher visiteur */}
-            <div className="pl-2">
-              <span className="text-4xl md:text-5xl font-bold text-[#5e8f3e] block">
+        {/* Contenu principal - CENTRÉ VERTICALEMENT SUR MOBILE */}
+        <div className="relative z-10 p-4 md:p-8 lg:p-12 pt-8 md:pt-12 lg:pt-16 h-full flex flex-col justify-center md:justify-start">
+          {/* Bonjour cher visiteur avec Logo Fosika SORTI DE LA LIGNE VERTE SUR MOBILE/TABLETTE */}
+          <div className="relative mb-4 md:mb-6 -mt-1 md:-mt-2 lg:-mt-4">
+            {/* Bonjour cher visiteur - TEXTE RÉDUIT SUR MOBILE ET TABLETTE */}
+            <div className="pl-1 md:pl-2">
+              <span className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold text-[#5e8f3e] block">
                 {language === "fr" ? "Bonjour" : "Miarahaba"}
               </span>
-              <span className="text-4xl md:text-5xl font-bold text-[#b3d088] inline">
+              <span className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold text-[#b3d088] inline">
                 {language === "fr" ? "cher visiteur" : "tompoko"}
               </span>
-              <span className="text-4xl md:text-5xl font-bold text-[#223250] inline">
+              <span className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold text-[#223250] inline">
                 ,
               </span>
             </div>
 
-            {/* Logo Fosika - centré horizontalement dans le cadre vert, aligné verticalement avec le texte */}
+            {/* Logo Fosika - AGRANDI ET SORTI DE LA LIGNE VERTE SUR MOBILE/TABLETTE */}
             <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
               <img
                 src={LogoFosika}
                 alt="Logo Fosika"
-                className="h-32 md:h-48 w-auto object-contain"
+                className="h-24 sm:h-28 md:h-32 lg:h-32 xl:h-48 w-auto object-contain md:translate-y-0 translate-y-2"
               />
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-8 md:gap-16 items-center">
-            <div className="flex-1 pl-4 pr-2">
-              <div className="mb-6 bg-[#223250] rounded-[20px] px-4 py-2 inline-block ml-2">
-                <svg width="80" height="26">
-                  <ellipse cx="16" cy="14" rx="8" ry="8" fill="#ffffff" />
-                  <ellipse cx="40" cy="14" rx="8" ry="8" fill="#ffffff" />
-                  <ellipse cx="64" cy="14" rx="8" ry="8" fill="#ffffff" />
-                </svg>
-              </div>
+          {/* LES TROIS POINTS - PETITE LARGEUR ET TOTALEMENT À GAUCHE */}
+          <div className="mb-6 bg-[#223250] rounded-[15px] md:rounded-[20px] px-3 md:px-4 py-1.5 md:py-2 w-auto inline-block mr-auto">
+            <svg width="60" height="20" className="md:w-80 md:h-26">
+              <ellipse cx="12" cy="10" rx="6" ry="6" fill="#ffffff" />
+              <ellipse cx="30" cy="10" rx="6" ry="6" fill="#ffffff" />
+              <ellipse cx="48" cy="10" rx="6" ry="6" fill="#ffffff" />
+            </svg>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-4 md:gap-8 lg:gap-16 items-center flex-1">
+            <div className="flex-1 pl-2 md:pl-4 pr-1 md:pr-2">
               <div className="clear-both"></div>
 
-              <div className="text-gray-700 text-sm md:text-base leading-relaxed mb-6 max-h-[180px] overflow-y-auto pr-3 pl-2 scrollable-text">
-                <p className="mb-3">{t.welcome.title}</p>
-                <p className="mb-3">{t.welcome.subtitle}</p>
+              {/* ZONE TEXTE AVEC HAUTEUR ADAPTÉE PAR ÉCRAN ET TEXTE JUSTIFIÉ */}
+              <div className="text-gray-700 text-xs md:text-sm lg:text-base leading-relaxed mb-4 md:mb-6 max-h-[350px] md:max-h-[200px] lg:max-h-[180px] overflow-y-auto pr-2 md:pr-3 pl-1 md:pl-2 scrollable-text">
+                {/* Premier paragraphe avec texte justifié */}
+                <p className="mb-2 md:mb-3 text-justify">{t.welcome.title}</p>
 
-                <div className="mb-3">
-                  <p className="font-semibold text-gray-800 mb-2">
+                {/* Deuxième paragraphe avec texte justifié */}
+                <p className="mb-2 md:mb-3 text-justify">
+                  {t.welcome.subtitle}
+                </p>
+
+                <div className="mb-2 md:mb-3">
+                  <p className="font-semibold text-gray-800 mb-1 md:mb-2 text-left">
                     {t.welcome.initiative}
                   </p>
-                  <ul className="space-y-1 text-gray-700">
+                  <ul className="space-y-0.5 md:space-y-1 text-gray-700">
                     {t.welcome.cases.map((item, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-[#b3d088] mr-2">✓</span>
-                        <span>{item}</span>
+                        <span className="text-[#b3d088] mr-1 md:mr-2">✓</span>
+                        <span className="text-justify">{item}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="mb-3">
-                  <p className="font-semibold text-gray-800 mb-2">
+                <div className="mb-2 md:mb-3">
+                  <p className="font-semibold text-gray-800 mb-1 md:mb-2 text-left">
                     {t.welcome.contribute}
                   </p>
-                  <ul className="space-y-1 text-gray-700">
+                  <ul className="space-y-0.5 md:space-y-1 text-gray-700">
                     {t.welcome.benefits.map((item, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-[#b3d088] mr-2">✓</span>
-                        <span>{item}</span>
+                        <span className="text-[#b3d088] mr-1 md:mr-2">✓</span>
+                        <span className="text-justify">{item}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <p className="mb-3">{t.welcome.vigilance}</p>
+                <p className="mb-2 md:mb-3 text-justify">
+                  {t.welcome.vigilance}
+                </p>
 
-                <p className="text-center font-bold text-[#5e8f3e] text-lg">
+                <p className="text-center font-bold text-[#5e8f3e] text-sm md:text-base lg:text-lg">
                   {t.welcome.slogan}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col gap-6 w-full md:w-auto items-center">
+            {/* BOUTONS - TAILLE REDUITE SUR MOBILE */}
+            <div className="flex flex-col gap-4 md:gap-6 w-full lg:w-auto items-center">
               <button
                 onClick={() => setStep(1)}
-                className="bg-[#b3d088] text-white py-3 px-8 rounded-xl font-bold text-base transition-transform hover:scale-105 min-w-[220px] flex items-center justify-center shadow-[4px_8px_0_#e1e4e4] flex-col"
+                className="bg-[#b3d088] text-white py-2 md:py-3 px-4 md:px-8 rounded-xl font-bold text-sm md:text-base transition-transform hover:scale-105 min-w-[180px] md:min-w-[220px] flex items-center justify-center shadow-[3px_6px_0_#e1e4e4] md:shadow-[4px_8px_0_#e1e4e4] flex-col"
               >
                 {t.welcome.submitBtn}
-                <span className="text-sm font-normal mt-1">
+                <span className="text-xs font-normal mt-0.5 md:mt-1">
                   {t.welcome.clickHere}
                 </span>
               </button>
 
               <button
                 onClick={() => navigate("/suivi")}
-                className="border-2 border-[#b3d088] text-[#277335] py-3 px-8 rounded-xl font-bold text-base transition-colors hover:bg-green-50 min-w-[220px]"
+                className="border-2 border-[#b3d088] text-[#277335] py-2 md:py-3 px-4 md:px-8 rounded-xl font-bold text-sm md:text-base transition-colors hover:bg-green-50 min-w-[180px] md:min-w-[220px]"
               >
                 {language === "fr" ? "Suivre un dossier" : "Hanaraka dossier"}
               </button>
@@ -415,26 +505,27 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
           </div>
         </div>
 
+        {/* Mégaphone - TAILLE REDUITE SUR MOBILE */}
         <div className="absolute bottom-0 right-0 z-10">
           <img
             src={Megaphone}
             alt="Megaphone"
-            className="w-20 h-20 md:w-28 md:h-28"
+            className="w-16 h-16 md:w-20 md:h-20 lg:w-28 lg:h-28"
           />
         </div>
       </div>
 
       <style jsx>{`
         .scrollable-text::-webkit-scrollbar {
-          width: 6px;
+          width: 4px;
         }
         .scrollable-text::-webkit-scrollbar-track {
           background: #f1f1f1;
-          border-radius: 10px;
+          border-radius: 8px;
         }
         .scrollable-text::-webkit-scrollbar-thumb {
           background: #b3d088;
-          border-radius: 10px;
+          border-radius: 8px;
         }
         .scrollable-text::-webkit-scrollbar-thumb:hover {
           background: #5e8f3e;
@@ -443,7 +534,6 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
     </div>
   );
 };
-
 // Composant Choix isolé - SANS BOUTON DE LANGUE
 const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
   const t = translations[language];

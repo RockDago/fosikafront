@@ -218,6 +218,68 @@ export default function DossierTracker() {
     navigate("/");
   };
 
+  // ✅ FONCTIONS POUR LES FICHIERS - IMPLÉMENTATION COMPLÈTE
+  const handleViewFile = async (fileName) => {
+    try {
+      console.log("👁️ Tentative de visualisation du fichier:", fileName);
+      
+      // Construire l'URL complète
+      const fileUrl = `${API.defaults.baseURL}/files/${encodeURIComponent(fileName)}`;
+      console.log("📁 URL de visualisation:", fileUrl);
+      
+      // Ouvrir dans un nouvel onglet
+      const newWindow = window.open(fileUrl, '_blank');
+      
+      if (!newWindow) {
+        alert("Veuillez autoriser les pop-ups pour visualiser les fichiers");
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la visualisation du fichier:', error);
+      alert("Erreur lors de l'ouverture du fichier: " + error.message);
+    }
+  };
+
+  const handleDownloadFile = async (fileName) => {
+    try {
+      console.log("📥 Tentative de téléchargement du fichier:", fileName);
+      
+      // Construire l'URL de téléchargement
+      const downloadUrl = `${API.defaults.baseURL}/files/${encodeURIComponent(fileName)}/download`;
+      console.log("📥 URL de téléchargement:", downloadUrl);
+      
+      // Créer un lien invisible pour forcer le téléchargement
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', fileName);
+      link.setAttribute('target', '_blank');
+      
+      // Simuler le clic
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Journaliser le téléchargement
+      console.log("✅ Téléchargement initié pour:", fileName);
+      
+    } catch (error) {
+      console.error('❌ Erreur lors du téléchargement:', error);
+      alert("Erreur lors du téléchargement: " + error.message);
+    }
+  };
+
+  // Optionnel: Ajoutez cette fonction pour tester la connexion aux fichiers
+  const testFileConnection = async (fileName) => {
+    try {
+      const response = await API.get(`/files/${fileName}/url`);
+      console.log("✅ Test connexion fichier:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Test échoué:", error.response?.data);
+      return null;
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "en_cours":
@@ -281,16 +343,6 @@ export default function DossierTracker() {
     } catch (e) {
       return dateString;
     }
-  };
-
-  const handleDownloadFile = (fileName) => {
-    // Implémentez la logique de téléchargement ici
-    console.log("📥 Téléchargement du fichier:", fileName);
-  };
-
-  const handleViewFile = (fileName) => {
-    // Implémentez la logique de visualisation ici
-    console.log("👁️ Visualisation du fichier:", fileName);
   };
 
   if (error && page === "recherche") {

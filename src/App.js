@@ -1,5 +1,11 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+
 import LoadingPage from "./components/LoadingPage";
 import FormulaireSignalement from "./components/SignalementForm";
 import SuiviDossier from "./components/SuiviDossier";
@@ -7,6 +13,21 @@ import Login from "./components/login";
 import DashboardAdmin from "./components/DashboardAdmin";
 import DashboardAgent from "./components/DashboardAgent";
 import DashboardInvest from "./components/DashboardInvest";
+
+import { authUtils } from "./utils/authUtils";
+
+// Composant pour sécuriser les routes privées
+const PrivateRoute = ({ children, allowedRoles }) => {
+  const isAuth = authUtils.isAuthenticated();
+  const userType =
+    localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
+
+  if (!isAuth || !allowedRoles.includes(userType)) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  return children;
+};
 
 function App() {
   return (
@@ -24,14 +45,35 @@ function App() {
         {/* Page de connexion admin */}
         <Route path="/admin/login" element={<Login />} />
 
-        {/* Tableau de bord Admin */}
-        <Route path="/admin/*" element={<DashboardAdmin />} />
+        {/* Tableau de bord Admin (protégé) */}
+        <Route
+          path="/admin/*"
+          element={
+            <PrivateRoute allowedRoles={["admin"]}>
+              <DashboardAdmin />
+            </PrivateRoute>
+          }
+        />
 
-        {/* Tableau de bord Agent */}
-        <Route path="/agent/*" element={<DashboardAgent />} />
+        {/* Tableau de bord Agent (protégé) */}
+        <Route
+          path="/agent/*"
+          element={
+            <PrivateRoute allowedRoles={["agent"]}>
+              <DashboardAgent />
+            </PrivateRoute>
+          }
+        />
 
-        {/* Tableau de bord Investigateur */}
-        <Route path="/investigateur/*" element={<DashboardInvest />} />
+        {/* Tableau de bord Investigateur (protégé) */}
+        <Route
+          path="/investigateur/*"
+          element={
+            <PrivateRoute allowedRoles={["investigateur"]}>
+              <DashboardInvest />
+            </PrivateRoute>
+          }
+        />
 
         {/* Route fallback pour les pages non trouvées */}
         <Route
