@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// ✅ Importez votre instance Axios configurée
-import axios from "../config/axios";
+// ✅ Importez votre nouvelle instance Axios configurée
+import API from "../config/axios";
 
 import LogoFosika from "../assets/images/logo fosika.png";
 import LogoRep from "../assets/images/logo rep.png";
@@ -82,8 +82,8 @@ export default function DossierTracker() {
       setIsLoading(true);
       setError(null);
       try {
-        // ✅ UTILISEZ AXIOS AU LIEU DE FETCH
-        const response = await axios.get("/reports");
+        // ✅ UTILISEZ LA NOUVELLE INSTANCE AXIOS
+        const response = await API.get("/reports");
 
         const result = response.data;
 

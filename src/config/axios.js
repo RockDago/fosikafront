@@ -1,29 +1,24 @@
 import axios from "axios";
 
-// ✅ Configuration automatique de l'URL de base
-const BASE_URL =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
-    ? "http://localhost:8000/api" // 👉 Développement local
-    : "http://fosika.mesupres.edu.mg/api"; // 👉 Production
+export const API_URL = "https://fosika.mesupres.edu.mg/api";
 
-console.log(`🚀 Configuration Axios - URL de base: ${BASE_URL}`);
-
-// Instance Axios avec configuration corrigée
-const instance = axios.create({
-  baseURL: BASE_URL, // 👈 ICI on utilise la variable dynamique
-  timeout: 10000,
+// Création d'une instance Axios
+const API = axios.create({
+  baseURL: API_URL, // Utilisation de la constante API_URL
   headers: {
-    Accept: "application/json",
     "Content-Type": "application/json",
+    Accept: "application/json",
   },
+  timeout: 20000, // Timeout 20 secondes
   withCredentials: false,
 });
 
+console.log(`🚀 Configuration Axios - URL de base: ${API_URL}`);
+
 // --- Gestion des tokens pour Admin ET Team ---
 
-// Dans votre fichier axios.js, ajoutez cette vérification
-instance.interceptors.request.use(
+// Intercepteur pour bloquer les requêtes admin non autorisées
+API.interceptors.request.use(
   (config) => {
     // Ne pas envoyer de requêtes /admin/* si l'utilisateur est un team admin
     const userType =
@@ -132,7 +127,7 @@ export const getUserType = () => {
 };
 
 // --- Intercepteur pour ajouter le token Bearer ---
-instance.interceptors.request.use(
+API.interceptors.request.use(
   (config) => {
     const authData = getAuthToken();
 
@@ -158,7 +153,7 @@ instance.interceptors.request.use(
 );
 
 // --- Intercepteur pour gérer les erreurs - CORRIGÉ AVEC GESTION COMPTE DÉSACTIVÉ ---
-instance.interceptors.response.use(
+API.interceptors.response.use(
   (response) => {
     console.log(
       `✅ ${response.config.method?.toUpperCase()} ${
@@ -170,7 +165,7 @@ instance.interceptors.response.use(
   (error) => {
     if (error.code === "ERR_NETWORK") {
       console.error(
-        `🌐 Erreur réseau: Le serveur backend n'est pas accessible à ${BASE_URL}`
+        `🌐 Erreur réseau: Le serveur backend n'est pas accessible à ${API_URL}`
       );
       console.error(
         "Vérifiez que le serveur Laravel est démarré et accessible"
@@ -220,4 +215,4 @@ instance.interceptors.response.use(
   }
 );
 
-export default instance;
+export default API;

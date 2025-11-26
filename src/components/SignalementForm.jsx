@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// ✅ Importez votre instance Axios configurée
-import axios from "../config/axios";
+// ✅ Importez votre NOUVELLE instance Axios configurée
+import API from "../config/axios";
 
 // Import des images
 import LogoRep from "../assets/images/logo rep.png";
@@ -1381,8 +1381,8 @@ const SignalementForm = () => {
 
       console.log("🔄 Envoi des données:", formDataToSend);
 
-      // ✅ UTILISATION D'AXIOS AU LIEU DE FETCH
-      const response = await axios.post("/reports", formDataToSend);
+      // ✅ UTILISATION DE LA NOUVELLE INSTANCE AXIOS
+      const response = await API.post("/reports", formDataToSend);
 
       console.log("📡 Statut de la réponse:", response.status);
 
