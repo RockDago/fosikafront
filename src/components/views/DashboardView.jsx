@@ -34,8 +34,8 @@ const defaultCategoryStructure = [
     icon: "📜",
   },
   {
-    id: "fraudes-academique",
-    name: "Fraudes Académiques",
+    id: "offre-formation-irreguliere",
+    name: "Offre de formation irrégulière (non habilité)",
     subtitle: "Établissements non habilités",
     icon: "🎓",
   },
@@ -287,7 +287,8 @@ export default function DashboardView() {
   const getCategoryLabel = (categoryId) => {
     const categoryMap = {
       "faux-diplomes": "Faux Diplômes",
-      "fraudes-academique": "Fraudes Académiques",
+      "offre-formation-irreguliere":
+        "Offre de formation irrégulière (non habilité)",
       "recrutements-irreguliers": "Recrutements Irréguliers",
       harcelement: "Harcèlement",
       corruption: "Corruption",

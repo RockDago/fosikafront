@@ -90,9 +90,9 @@ const ReportsView = () => {
       name: "Faux Diplômes",
     },
     {
-      id: "fraudes-academique",
+      id: "offre-formation-irreguliere",
       emoji: "🎓",
-      name: "Fraudes Académiques",
+      name: "Offre de formation irrégulière (non habilité)",
     },
     {
       id: "recrutements-irreguliers",
@@ -185,7 +185,8 @@ const ReportsView = () => {
   // Mapping des catégories API vers les catégories affichées
   const categoryMapping = {
     "faux-diplomes": "📜 Faux Diplômes",
-    "fraudes-academique": "🎓 Fraudes Académiques",
+    "offre-formation-irreguliere":
+      "🎓 Offre de formation irrégulière (non habilité)",
     "recrutements-irreguliers": "💼 Recrutements Irréguliers",
     harcelement: "⚠️ Harcèlement",
     corruption: "🔴 Corruption",

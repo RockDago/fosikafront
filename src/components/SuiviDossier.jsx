@@ -25,7 +25,7 @@ import LogoMesupres from "../assets/images/logo mesupres.png";
 
 const categoryIcons = {
   "faux-diplomes": "📜",
-  "fraudes-academique": "🎓",
+  "offre-formation-irreguliere": "🎓",
   "recrutements-irreguliers": "💼",
   harcelement: "⚠️",
   corruption: "🔴",
@@ -34,7 +34,8 @@ const categoryIcons = {
 
 const categoryLabels = {
   "faux-diplomes": "Faux Diplômes",
-  "fraudes-academique": "Fraudes Académiques",
+  "offre-formation-irreguliere":
+    "Offre de formation irrégulière (non habilité)",
   "recrutements-irreguliers": "Recrutements Irréguliers",
   harcelement: "Harcèlement",
   corruption: "Corruption",
@@ -44,7 +45,8 @@ const categoryLabels = {
 // Nouveaux titres par défaut selon la catégorie
 const defaultTitles = {
   "faux-diplomes": "Signalement de faux diplôme",
-  "fraudes-academique": "Signalement de fraude académique",
+  "offre-formation-irreguliere":
+    "Signalement d'offre de formation irrégulière (non habilité)",
   "recrutements-irreguliers": "Signalement de recrutement irrégulier",
   harcelement: "Signalement de harcèlement",
   corruption: "Signalement de corruption",
@@ -145,6 +147,9 @@ export default function DossierTracker() {
               filesArray = [];
             }
 
+            // ✅ GÉRER LES SIGNALEMENTS SANS PREUVES
+            const hasProof = report.has_proof || filesArray.length > 0;
+
             // Utiliser le titre par défaut selon la catégorie si aucun titre n'est fourni
             const getDefaultTitle = (category) => {
               return defaultTitles[category] || "Signalement sans titre";
@@ -165,6 +170,7 @@ export default function DossierTracker() {
               description:
                 report.description || report.title || "Aucune description",
               files: filesArray,
+              hasProof: hasProof, // ✅ AJOUT DU CHAMP HAS_PROOF
               workflow: workflowData,
               region: report.region || "Non spécifié",
               city: report.city || "Non spécifié",
@@ -218,65 +224,80 @@ export default function DossierTracker() {
     navigate("/");
   };
 
-  // ✅ FONCTIONS POUR LES FICHIERS - IMPLÉMENTATION COMPLÈTE
-  const handleViewFile = async (fileName) => {
+  // ===== FONCTION POUR EXTRAIRE LE NOM DU FICHIER - AJOUTÉE =====
+  const extractFileName = (file) => {
+    // Si c'est déjà juste un nom de fichier
+    if (typeof file === "string") {
+      // Si c'est une URL complète, extraire le nom
+      if (file.includes("http://") || file.includes("https://")) {
+        return file.split("/").pop();
+      }
+      // Si c'est juste un chemin, prendre le dernier segment
+      if (file.includes("/")) {
+        return file.split("/").pop();
+      }
+      // Sinon c'est déjà le nom du fichier
+      return file;
+    }
+
+    // Si c'est un objet
+    if (typeof file === "object") {
+      return (
+        file.file_name ||
+        file.filename ||
+        extractFileName(file.path || file.url || "")
+      );
+    }
+
+    return file;
+  };
+
+  // ===== FONCTION POUR VOIR UN FICHIER - CORRIGÉE =====
+  const handleViewFile = async (file) => {
     try {
-      console.log("👁️ Tentative de visualisation du fichier:", fileName);
-      
-      // Construire l'URL complète
-      const fileUrl = `${API.defaults.baseURL}/files/${encodeURIComponent(fileName)}`;
-      console.log("📁 URL de visualisation:", fileUrl);
-      
+      // Extraire uniquement le nom du fichier
+      const fileName = extractFileName(file);
+
+      // Construire l'URL correcte
+      // const fileUrl = `http://127.0.0.1:8000/api/files/${fileName}`;
+
+      const fileUrl = `${API.defaults.baseURL}/files/${fileName}`;
+
       // Ouvrir dans un nouvel onglet
-      const newWindow = window.open(fileUrl, '_blank');
-      
+      const newWindow = window.open(fileUrl, "_blank");
       if (!newWindow) {
         alert("Veuillez autoriser les pop-ups pour visualiser les fichiers");
       }
-      
     } catch (error) {
-      console.error('❌ Erreur lors de la visualisation du fichier:', error);
+      console.error("Erreur lors de la visualisation du fichier:", error);
       alert("Erreur lors de l'ouverture du fichier: " + error.message);
     }
   };
 
-  const handleDownloadFile = async (fileName) => {
+  // ===== FONCTION POUR TÉLÉCHARGER UN FICHIER - CORRIGÉE =====
+  const handleDownloadFile = async (file) => {
     try {
-      console.log("📥 Tentative de téléchargement du fichier:", fileName);
-      
+      // Extraire uniquement le nom du fichier
+      const fileName = extractFileName(file);
+
       // Construire l'URL de téléchargement
-      const downloadUrl = `${API.defaults.baseURL}/files/${encodeURIComponent(fileName)}/download`;
-      console.log("📥 URL de téléchargement:", downloadUrl);
-      
+      // const downloadUrl = `http://127.0.0.1:8000/api/files/${fileName}/download`;
+
+      const downloadUrl = `${API.defaults.baseURL}/files/${fileName}/download`;
+
       // Créer un lien invisible pour forcer le téléchargement
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = downloadUrl;
-      link.setAttribute('download', fileName);
-      link.setAttribute('target', '_blank');
-      
+      link.setAttribute("download", fileName);
+      link.setAttribute("target", "_blank");
+
       // Simuler le clic
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Journaliser le téléchargement
-      console.log("✅ Téléchargement initié pour:", fileName);
-      
     } catch (error) {
-      console.error('❌ Erreur lors du téléchargement:', error);
+      console.error("Erreur lors du téléchargement:", error);
       alert("Erreur lors du téléchargement: " + error.message);
-    }
-  };
-
-  // Optionnel: Ajoutez cette fonction pour tester la connexion aux fichiers
-  const testFileConnection = async (fileName) => {
-    try {
-      const response = await API.get(`/files/${fileName}/url`);
-      console.log("✅ Test connexion fichier:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("❌ Test échoué:", error.response?.data);
-      return null;
     }
   };
 
@@ -578,6 +599,18 @@ export default function DossierTracker() {
                     Référence: {dossierActuel.reference}
                   </p>
                 </div>
+                {/* ✅ INDICATION SI LE SIGNALEMENT A DES PREUVES */}
+                <div className="mt-2">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      dossierActuel.hasProof
+                        ? "bg-green-100 text-green-800 border border-green-200"
+                        : "bg-gray-100 text-gray-600 border border-gray-200"
+                    }`}
+                  >
+                    {dossierActuel.hasProof ? "Avec preuves" : "Sans preuves"}
+                  </span>
+                </div>
               </div>
               <span
                 className={`px-4 py-2 rounded-lg text-sm font-bold border-2 shadow-lg ${getStatusColor(
@@ -726,44 +759,58 @@ export default function DossierTracker() {
               </h2>
               {dossierActuel.files && dossierActuel.files.length > 0 ? (
                 <div className="grid gap-2">
-                  {dossierActuel.files.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-gradient-to-br from-[#4c7026] to-[#b4cd7b] rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <span className="text-white text-xs font-bold">
-                            {file.split(".").pop()?.toUpperCase() || "FILE"}
-                          </span>
+                  {dossierActuel.files.map((file, index) => {
+                    // Extraire uniquement le nom du fichier pour l'affichage
+                    const displayName = extractFileName(file);
+                    const extension =
+                      displayName.split(".").pop()?.toUpperCase() || "FILE";
+
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-gradient-to-br from-[#4c7026] to-[#b4cd7b] rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                            <span className="text-white text-xs font-bold">
+                              {extension}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-800 font-medium text-sm block">
+                              Preuve {index + 1}
+                            </span>
+                            <span className="text-gray-500 text-xs">
+                              {displayName}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-gray-800 font-medium text-sm">
-                          {file}
-                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewFile(file)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            <Eye size={14} />
+                            Voir
+                          </button>
+                          <button
+                            onClick={() => handleDownloadFile(file)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                          >
+                            <Download size={14} />
+                            Télécharger
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleViewFile(file)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                        >
-                          <Eye size={14} />
-                          Voir
-                        </button>
-                        <button
-                          onClick={() => handleDownloadFile(file)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                        >
-                          <Download size={14} />
-                          Télécharger
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-5 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-sm text-gray-500">
-                    Aucun fichier joint à ce dossier
+                    {dossierActuel.hasProof
+                      ? "Aucun fichier joint à ce dossier"
+                      : "Signalement soumis sans pièces jointes"}
                   </p>
                 </div>
               )}

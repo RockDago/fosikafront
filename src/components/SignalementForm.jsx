@@ -21,7 +21,7 @@ import DrapeauMalagasy from "../assets/images/Asset 5.png";
 import Megaphone from "../assets/images/Asset 7.png";
 import FondAsset from "../assets/images/Asset 8.png";
 
-// Traductions globales
+// Traductions globales - AJOUT DE LA NOUVELLE SECTION "proof"
 const translations = {
   fr: {
     welcome: {
@@ -52,6 +52,17 @@ const translations = {
       title: "Choisissez",
       anonymous: "Anonyme",
       identified: "Je m'identifie",
+      back: "Retour",
+    },
+    // NOUVELLE SECTION POUR LE CHOIX DES PREUVES
+    proof: {
+      title: "Preuves disponibles",
+      question: "Avez-vous des preuves à joindre à votre signalement ?",
+      description:
+        "Les preuves peuvent inclure : photos, vidéos, documents, captures d'écran, etc.",
+      yes: "Oui, j'ai des preuves",
+      no: "Non, je n'ai pas de preuves",
+      continueWithoutProof: "Soumettre sans preuves",
       back: "Retour",
     },
     personal: {
@@ -99,10 +110,10 @@ const translations = {
       home: "Retour à l'accueil",
     },
     categories: {
-      "Faux-diplomes": "Faux diplômes",
+      "faux-diplomes": "Faux diplômes",
       "Offre de formation irrégulière ( non habilité)":
         "Offre de formation irrégulière ( non habilité)",
-      "Fecrutements-irreguliers": "Recrutements irréguliers",
+      "recrutements-irreguliers": "Recrutements irréguliers",
       harcelement: "Harcèlement",
       corruption: "Corruption",
       divers: "Divers",
@@ -152,6 +163,17 @@ const translations = {
       title: "Safidio",
       anonymous: "Tsy mitonona anarana",
       identified: "Hilaza ny momba ahy",
+      back: "Hiverina",
+    },
+    // NOUVELLE SECTION POUR LE CHOIX DES PREUVES
+    proof: {
+      title: "Porofo misy",
+      question: "Manana porofo ampiana amin'ny fitarainana ve ianao ?",
+      description:
+        "Afaka misy porofo toy ny : sary, horonantsary, taratasy, capture écran, sns.",
+      yes: "Eny, manana porofo aho",
+      no: "Tsia, tsy manana porofo aho",
+      continueWithoutProof: "Hanalefa tsy misy porofo",
       back: "Hiverina",
     },
     personal: {
@@ -231,6 +253,7 @@ const generateReference = () => {
   const random = Math.random().toString(36).substr(2, 5).toUpperCase();
   return `FOS-${timestamp}-${random}`;
 };
+
 // Composant Page d'accueil avec design responsive - Desktop inchangé
 const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
   const t = translations[language];
@@ -534,6 +557,7 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
     </div>
   );
 };
+
 // Composant Choix isolé - SANS BOUTON DE LANGUE
 const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
   const t = translations[language];
@@ -615,7 +639,7 @@ const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
                       className="w-6 h-6 border-2 border-gray-400 accent-blue-600"
                       onChange={() => {
                         setIsAnonymous(true);
-                        setStep(3);
+                        setStep(2); // Redirige vers la nouvelle étape de preuves
                       }}
                     />
                     <span className="flex-1 text-center">
@@ -634,7 +658,7 @@ const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
                       className="w-6 h-6 border-2 border-red-500 accent-red-600"
                       onChange={() => {
                         setIsAnonymous(false);
-                        setStep(2);
+                        setStep(2); // Redirige vers la nouvelle étape de preuves
                       }}
                     />
                     <span className="flex-1 text-center">
@@ -659,6 +683,153 @@ const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
     </div>
   );
 };
+
+// NOUVEAU COMPOSANT : Étape de choix des preuves
+const ProofStep = ({ language, setStep, setHasProof, isAnonymous }) => {
+  const t = translations[language];
+
+  return (
+    <div className="bg-white min-h-screen flex flex-col items-center p-4 font-inter">
+      {/* En-tête avec logos - IDENTIQUE à la page d'accueil */}
+      <div className="w-full max-w-3xl mx-auto mb-6">
+        <div className="w-full flex items-center justify-center bg-white p-3 rounded-lg">
+          <div className="flex items-center justify-center space-x-4">
+            {/* Bloc logos : REP en haut, MESUPRES en bas */}
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <img
+                src={LogoRep}
+                alt="Logo République"
+                className="h-16 w-16 object-contain"
+              />
+              <img
+                src={LogoMesupres}
+                alt="Logo MESUPRES"
+                className="h-16 w-16 object-contain"
+              />
+            </div>
+
+            <div className="w-[2px] bg-gray-400 h-36"></div>
+
+            {/* Bloc texte avec alignement vertical corrigé */}
+            <div className="flex flex-col justify-center space-y-1">
+              {/* Texte 1 - Logo République - REMONTÉ */}
+              <span className="font-semibold text-sm uppercase leading-tight p-2">
+                Repoblikan'i Madagasikara
+              </span>
+
+              {/* Texte 2 - Logo MESUPRES - DESCENDU */}
+              <span className="font-semibold text-sm uppercase leading-tight p-2">
+                Ministeran'ny Fampianarana Ambony
+                <br />
+                sy Fikarohana Ara-tsiansa
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contenu principal avec cadre vert - MÊMES DIMENSIONS QUE LA PAGE D'ACCUEIL */}
+      <div className="relative w-full max-w-6xl flex-1">
+        {/* Cadre vert principal - MÊME DIMENSION QUE LA PAGE BONJOUR */}
+        <div className="absolute inset-0 border-4 border-[#b3d088] bg-[#f9faf7] z-0"></div>
+
+        {/* Contenu */}
+        <div className="relative z-10 p-8 md:p-12 pt-16 md:pt-20 h-full flex flex-col items-center justify-center">
+          {/* Zone centrale avec fond transparent et Asset 8 en arrière-plan */}
+          <div className="relative bg-transparent rounded-[80px] px-8 py-12 max-w-xl w-full">
+            {/* Asset 8 en fond - MÊME TAILLE QUE CHOISISSEZ */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+              <img
+                src={FondAsset}
+                alt="Fond"
+                className="max-w-none w-[120%] h-[120%] object-contain scale-110 select-none opacity-100"
+              />
+            </div>
+
+            {/* Contenu par-dessus - TOUT CENTRÉ ET ALIGNÉ */}
+            <div className="relative z-20 flex flex-col items-center justify-center w-full text-center">
+              {/* Titre centré - TAILLE RÉDUITE COMME CHOISISSEZ */}
+              <h1 className="text-2xl md:text-3xl font-bold text-[#5e8f3e] mb-6">
+                {t.proof.title}
+              </h1>
+
+              {/* Question - TEXTE PLUS PETIT */}
+              <p className="text-base md:text-lg font-semibold text-gray-800 mb-3 max-w-md">
+                {t.proof.question}
+              </p>
+
+              {/* Description - TEXTE ENCORE PLUS PETIT */}
+              <p className="text-xs text-gray-600 mb-8 max-w-md leading-relaxed">
+                {t.proof.description}
+              </p>
+
+              {/* Options parfaitement centrées et alignées - ESPACEMENT RÉDUIT */}
+              <div className="flex flex-col items-center justify-center space-y-4 w-full">
+                {/* Oui - PARFAITEMENT CENTRÉ */}
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex items-center justify-center space-x-3 cursor-pointer text-gray-700 text-base w-full max-w-[220px]">
+                    <input
+                      type="radio"
+                      name="choix-preuve"
+                      value="oui"
+                      className="w-5 h-5 border-2 border-green-500 accent-green-600"
+                      onChange={() => {
+                        setHasProof(true);
+                        // Si anonyme, aller directement à la catégorie, sinon aux infos perso
+                        if (isAnonymous) {
+                          setStep(4); // Catégorie
+                        } else {
+                          setStep(3); // Infos personnelles
+                        }
+                      }}
+                    />
+                    <span className="flex-1 text-center font-medium">
+                      {t.proof.yes}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Non - PARFAITEMENT CENTRÉ */}
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex items-center justify-center space-x-3 cursor-pointer text-gray-700 text-base w-full max-w-[220px]">
+                    <input
+                      type="radio"
+                      name="choix-preuve"
+                      value="non"
+                      className="w-5 h-5 border-2 border-red-500 accent-red-600"
+                      onChange={() => {
+                        setHasProof(false);
+                        // Si anonyme, aller directement à la catégorie, sinon aux infos perso
+                        if (isAnonymous) {
+                          setStep(4); // Catégorie
+                        } else {
+                          setStep(3); // Infos personnelles
+                        }
+                      }}
+                    />
+                    <span className="flex-1 text-center font-medium">
+                      {t.proof.no}
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bouton Retour - STYLE UNIFORMISÉ */}
+          <button
+            onClick={() => setStep(1)}
+            className="mt-6 text-[#5e8f3e] hover:text-[#4a7b32] flex items-center gap-2 font-semibold text-base"
+          >
+            <ChevronLeft size={20} />
+            {t.proof.back}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Composant Informations personnelles isolé - SANS BOUTON DE LANGUE
 const PersonalInfoStep = ({
   language,
@@ -667,6 +838,7 @@ const PersonalInfoStep = ({
   errors,
   setErrors,
   setStep,
+  hasProof,
 }) => {
   const t = translations[language];
 
@@ -680,7 +852,7 @@ const PersonalInfoStep = ({
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
-      setStep(3); // Vers FITARAINANA
+      setStep(4); // Vers FITARAINANA
     }
   };
 
@@ -855,7 +1027,7 @@ const PersonalInfoStep = ({
               <div className="flex justify-center gap-6 pt-4">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   className="text-[#5e8f3e] hover:text-[#4a7b32] flex items-center gap-2 font-semibold text-lg"
                 >
                   <ChevronLeft size={24} />
@@ -887,6 +1059,8 @@ const CategoryStep = ({
   setErrors,
   setStep,
   isAnonymous,
+  hasProof,
+  setReferenceCode, // ✅ CORRECTION : Ajout de setReferenceCode
 }) => {
   const t = translations[language];
 
@@ -895,14 +1069,71 @@ const CategoryStep = ({
     label,
   }));
 
+  // ✅ ÉTAT POUR LA CERTIFICATION DE VÉRACITÉ
+  const [acceptTruth, setAcceptTruth] = useState(false);
+
   const handleNext = () => {
     const newErrors = {};
     if (!selectedCategory) newErrors.category = t.errors.categoryRequired;
     if (!formData.categoryDetails?.trim())
       newErrors.categoryDetails = t.errors.descriptionRequired;
+    if (!hasProof && !acceptTruth)
+      newErrors.acceptTruth = t.errors.truthRequired; // ✅ VALIDATION SEULEMENT SANS PREUVES
+
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
-      setStep(4);
+      // Si l'utilisateur a des preuves, aller à l'étape upload, sinon soumettre directement
+      if (hasProof) {
+        setStep(5); // Upload
+      } else {
+        // ✅ SOUMETTRE DIRECTEMENT SANS PREUVES
+        handleSubmitWithoutProof();
+      }
+    }
+  };
+
+  // ✅ FONCTION CORRIGÉE POUR LA SOUMISSION SANS PREUVES
+  const handleSubmitWithoutProof = async () => {
+    const submitData = {
+      type: isAnonymous ? "anonyme" : "identifie",
+      name: isAnonymous ? "Anonyme" : formData.name,
+      email: isAnonymous ? "" : formData.email,
+      phone: isAnonymous ? "" : formData.phone,
+      address: isAnonymous ? "" : formData.address,
+      category: selectedCategory,
+      description: formData.categoryDetails,
+      accept_terms: true, // ✅ Booléen réel
+      accept_truth: true, // ✅ Booléen réel
+      has_proof: false, // ✅ Booléen réel
+    };
+
+    try {
+      const response = await API.post("/reports", submitData, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.data.success) {
+        setReferenceCode(response.data.reference);
+        setStep(6); // Page de succès
+      } else {
+        throw new Error(response.data.message || t.errors.submission);
+      }
+    } catch (error) {
+      console.error("❌ Erreur soumission sans preuves:", error);
+
+      let errorMessage = t.errors.submission;
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors;
+        errorMessage = Object.entries(validationErrors)
+          .map(([field, messages]) => `${field}: ${messages.join(", ")}`)
+          .join("\n");
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
+      alert(t.errors.submission + ": " + errorMessage);
     }
   };
 
@@ -996,7 +1227,7 @@ const CategoryStep = ({
               </div>
 
               {/* Description */}
-              <div className="mb-8">
+              <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-800 mb-2">
                   {t.category.detailsLabel}{" "}
                   <span className="text-rose-600">*</span>
@@ -1021,11 +1252,38 @@ const CategoryStep = ({
                 )}
               </div>
 
+              {/* ✅ NOUVELLE CERTIFICATION POUR LES SIGNALEMENTS SANS PREUVES */}
+              {!hasProof && (
+                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="acceptTruthNoProof"
+                      checked={acceptTruth}
+                      onChange={(e) => setAcceptTruth(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 text-[#b3d088] rounded focus:ring-[#b3d088]"
+                    />
+                    <label
+                      htmlFor="acceptTruthNoProof"
+                      className="text-sm text-gray-700 leading-relaxed"
+                    >
+                      <span className="font-semibold text-rose-600">*</span>{" "}
+                      {t.upload.acceptTruth}
+                    </label>
+                  </div>
+                  {errors.acceptTruth && (
+                    <p className="mt-2 text-rose-600 text-xs flex items-center gap-1">
+                      <AlertCircle size={12} /> {errors.acceptTruth}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Boutons */}
               <div className="flex justify-center gap-6 pt-4">
                 <button
                   type="button"
-                  onClick={() => setStep(isAnonymous === false ? 2 : 1)}
+                  onClick={() => setStep(isAnonymous ? 2 : 3)}
                   className="text-[#5e8f3e] hover:text-[#4a7b32] flex items-center gap-2 font-semibold text-lg"
                 >
                   <ChevronLeft size={24} />
@@ -1035,7 +1293,9 @@ const CategoryStep = ({
                   type="submit"
                   className="px-8 py-2 bg-[#b3d088] hover:bg-[#9ec97a] text-white font-bold rounded-lg text-sm transition-all shadow-md"
                 >
-                  {t.category.continue}
+                  {hasProof
+                    ? t.category.continue
+                    : t.proof.continueWithoutProof}
                 </button>
               </div>
             </form>
@@ -1058,6 +1318,7 @@ const UploadStep = ({
   isSubmitting,
   setStep,
   handleSubmit,
+  hasProof,
 }) => {
   const t = translations[language];
 
@@ -1066,13 +1327,27 @@ const UploadStep = ({
     const errors = [];
     const validFiles = [];
     const maxSize = 25 * 1024 * 1024;
+    const validTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "video/mp4",
+      "application/pdf",
+    ];
 
     newFiles.forEach((file) => {
-      if (file.size > maxSize) {
+      if (!validTypes.includes(file.type)) {
         errors.push(
-          `${file.name} ${
-            language === "fr" ? "dépasse 25 Mo" : "mihoatra ny 25 Mo"
-          }`
+          `${file.name}: Type de fichier non supporté (${
+            file.type || "inconnu"
+          })`
+        );
+      } else if (file.size > maxSize) {
+        errors.push(
+          `${file.name}: Taille trop grande (${(
+            file.size /
+            (1024 * 1024)
+          ).toFixed(2)} Mo > 25 Mo)`
         );
       } else {
         validFiles.push(file);
@@ -1080,14 +1355,17 @@ const UploadStep = ({
     });
 
     setFileErrors(errors);
-    setFormData((prev) => ({
-      ...prev,
-      files: [...prev.files, ...validFiles],
-    }));
 
-    if (validFiles.length > 0 && errors.files) {
+    if (validFiles.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        files: [...prev.files, ...validFiles],
+      }));
       setErrors((prev) => ({ ...prev, files: "" }));
     }
+
+    // Reset l'input file pour permettre la sélection des mêmes fichiers
+    e.target.value = "";
   };
 
   const removeFile = (index) => {
@@ -1105,12 +1383,26 @@ const UploadStep = ({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  // ✅ CORRECTION DE LA FONCTION validateAndSubmit
   const validateAndSubmit = () => {
     const newErrors = {};
-    if (formData.files.length === 0) newErrors.files = t.errors.filesRequired;
-    if (!formData.acceptTruth) newErrors.acceptTruth = t.errors.truthRequired;
+
+    // Si l'utilisateur a dit avoir des preuves, vérifier qu'il y a des fichiers
+    if (hasProof === true && formData.files.length === 0) {
+      newErrors.files = t.errors.filesRequired;
+    }
+
+    // Si l'utilisateur a des fichiers, s'assurer que hasProof est true
+    if (formData.files.length > 0 && hasProof !== true) {
+      // Fichiers présents mais hasProof n'est pas true
+    }
+
+    if (!formData.acceptTruth) {
+      newErrors.acceptTruth = t.errors.truthRequired;
+    }
 
     setErrors(newErrors);
+
     if (Object.keys(newErrors).length === 0) {
       handleSubmit();
     }
@@ -1256,6 +1548,7 @@ const UploadStep = ({
                 htmlFor="acceptTruth"
                 className="text-xs text-gray-700 leading-relaxed"
               >
+                <span className="font-semibold text-rose-600">*</span>{" "}
                 {t.upload.acceptTruth}
               </label>
             </div>
@@ -1269,7 +1562,7 @@ const UploadStep = ({
             <div className="flex justify-center gap-6 pt-4 w-full">
               <button
                 type="button"
-                onClick={() => setStep(3)}
+                onClick={() => setStep(4)}
                 disabled={isSubmitting}
                 className="text-[#5e8f3e] hover:text-[#4a7b32] flex items-center gap-2 font-semibold text-lg disabled:opacity-50"
               >
@@ -1280,7 +1573,7 @@ const UploadStep = ({
                 onClick={validateAndSubmit}
                 disabled={
                   isSubmitting ||
-                  formData.files.length === 0 ||
+                  (hasProof && formData.files.length === 0) ||
                   !formData.acceptTruth
                 }
                 className="px-8 py-2 bg-[#b3d088] hover:bg-[#9ec97a] text-white font-bold rounded-lg text-sm transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -1432,6 +1725,7 @@ const SignalementForm = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [isAnonymous, setIsAnonymous] = useState(null);
+  const [hasProof, setHasProof] = useState(null); // NOUVEAU ÉTAT
   const [selectedCategory, setSelectedCategory] = useState("");
   const [language, setLanguage] = useState("fr");
   const [formData, setFormData] = useState({
@@ -1452,75 +1746,82 @@ const SignalementForm = () => {
 
   const handleSubmit = async () => {
     const t = translations[language];
-
     setIsSubmitting(true);
 
     try {
-      const formDataToSend = {
-        type: isAnonymous ? "anonyme" : "identifie",
-        name: isAnonymous ? "Anonyme" : formData.name,
-        email: isAnonymous ? null : formData.email,
-        phone: isAnonymous ? null : formData.phone,
-        address: isAnonymous ? null : formData.address,
-        category: selectedCategory,
-        description: formData.categoryDetails,
-        files: formData.files.map((file) => file.name),
-        accept_terms: true,
-        accept_truth: formData.acceptTruth,
-      };
+      console.log("🔄 Préparation du formulaire...");
 
-      console.log("🔄 Envoi des données:", formDataToSend);
+      const formDataToSend = new FormData();
 
-      // ✅ UTILISATION DE LA NOUVELLE INSTANCE AXIOS
-      const response = await API.post("/reports", formDataToSend);
+      // Champs texte / booleans
+      formDataToSend.append("type", isAnonymous ? "anonyme" : "identifie");
+      formDataToSend.append("name", isAnonymous ? "Anonyme" : formData.name);
+      formDataToSend.append("email", isAnonymous ? "" : formData.email);
+      formDataToSend.append("phone", isAnonymous ? "" : formData.phone);
+      formDataToSend.append("address", isAnonymous ? "" : formData.address);
+      formDataToSend.append("category", selectedCategory);
+      formDataToSend.append("description", formData.categoryDetails);
 
-      console.log("📡 Statut de la réponse:", response.status);
+      // ✅ Champs booléens convertis en 0/1 pour Laravel
+      formDataToSend.append("accept_terms", formData.acceptTerms ? 1 : 0);
+      formDataToSend.append("accept_truth", formData.acceptTruth ? 1 : 0);
+      formDataToSend.append("has_proof", hasProof ? 1 : 0);
 
-      const result = response.data;
-      console.log("📨 Réponse du serveur COMPLÈTE:", {
-        status: response.status,
-        data: result,
+      // Fichiers (photos / png / mp4)
+      if (formData.files && formData.files.length > 0) {
+        for (const file of formData.files) {
+          formDataToSend.append("files[]", file);
+          console.log(
+            `📁 Fichier ajouté: ${file.name} (${file.type}, ${file.size} bytes)`
+          );
+        }
+      }
+
+      console.log("📨 Envoi FormData au serveur...");
+
+      const response = await API.post("/reports", formDataToSend, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
-      if (result.vpn_detected) {
-        const message =
-          language === "fr" ? result.message.fr : result.message.mg;
-        alert(message);
-        return;
-      }
+      console.log("✅ Réponse du serveur:", response.data);
 
-      if (result.success || result.reference || result.data?.reference) {
-        console.log(
-          "✅ Succès - Référence:",
-          result.reference || result.data?.reference
-        );
-
-        const reference =
-          result.reference || result.data?.reference || generateReference();
-        setReferenceCode(reference);
-        setShowSuccess(true);
+      if (response.data.success) {
+        setReferenceCode(response.data.reference);
+        setStep(6);
       } else {
-        throw new Error(result.message || t.errors.submission);
+        throw new Error(response.data.message || t.errors.submission);
       }
     } catch (error) {
-      console.error("💥 Erreur complète:", error);
+      console.error("💥 Erreur lors de l'envoi:", error);
 
       let errorMessage = t.errors.submission;
-
       if (error.response?.data?.errors) {
-        errorMessage = Object.values(error.response.data.errors)
-          .flat()
-          .join(", ");
+        errorMessage = Object.entries(error.response.data.errors)
+          .map(([field, messages]) => `${field}: ${messages.join(", ")}`)
+          .join("\n");
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
       }
 
       alert(`❌ ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Fonction pour convertir un fichier en Base64
+  const convertFileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        // Retourner le data URL complet (data:image/jpeg;base64,...)
+        resolve(reader.result);
+      };
+      reader.onerror = (error) => reject(error);
+    });
   };
 
   const resetForm = () => {
@@ -1538,6 +1839,7 @@ const SignalementForm = () => {
     });
     setSelectedCategory("");
     setIsAnonymous(null);
+    setHasProof(null); // RÉINITIALISER
     setErrors({});
   };
 
@@ -1573,7 +1875,19 @@ const SignalementForm = () => {
     );
   }
 
+  // NOUVELLE ÉTAPE : Choix des preuves
   if (step === 2) {
+    return (
+      <ProofStep
+        language={language}
+        setStep={setStep}
+        setHasProof={setHasProof}
+        isAnonymous={isAnonymous}
+      />
+    );
+  }
+
+  if (step === 3) {
     return (
       <PersonalInfoStep
         language={language}
@@ -1582,11 +1896,12 @@ const SignalementForm = () => {
         errors={errors}
         setErrors={setErrors}
         setStep={setStep}
+        hasProof={hasProof}
       />
     );
   }
 
-  if (step === 3) {
+  if (step === 4) {
     return (
       <CategoryStep
         language={language}
@@ -1598,11 +1913,13 @@ const SignalementForm = () => {
         errors={errors}
         setErrors={setErrors}
         setStep={setStep}
+        hasProof={hasProof}
+        setReferenceCode={setReferenceCode} // ✅ CORRECTION : Ajout de setReferenceCode
       />
     );
   }
 
-  if (step === 4) {
+  if (step === 5) {
     return (
       <UploadStep
         language={language}
@@ -1615,6 +1932,18 @@ const SignalementForm = () => {
         isSubmitting={isSubmitting}
         setStep={setStep}
         handleSubmit={handleSubmit}
+        hasProof={hasProof} // ✅ BIEN PASSÉ ICI
+      />
+    );
+  }
+
+  if (step === 6) {
+    return (
+      <SuccessPage
+        language={language}
+        referenceCode={referenceCode}
+        navigate={navigate}
+        resetForm={resetForm}
       />
     );
   }

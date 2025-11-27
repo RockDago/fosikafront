@@ -43,8 +43,8 @@ const DashboardInvestView = ({ data }) => {
   const categoriesData = [
     { id: "faux-diplomes", name: "Faux Diplômes", total: 1, icon: "📜" },
     {
-      id: "fraudes-academique",
-      name: "Fraudes Académiques",
+      id: "offre-formation-irreguliere",
+      name: "Offre de formation irrégulière (non habilité)",
       total: 3,
       icon: "🎓",
     },
@@ -70,14 +70,14 @@ const DashboardInvestView = ({ data }) => {
     },
     {
       reference: "REF-2024-002",
-      categorie: "🎓 Fraudes Académiques",
+      categorie: "🎓 Offre de formation irrégulière (non habilité)",
       date: "2024-01-10",
       demandeur: "Cour des Comptes",
       statut: "Soumis BIANCO",
     },
     {
       reference: "REF-2024-003",
-      categorie: "🎓 Fraudes Académiques",
+      categorie: "🎓 Offre de formation irrégulière (non habilité)",
       date: "2024-01-08",
       demandeur: "Administration Territoriale",
       statut: "En cours",
@@ -98,7 +98,7 @@ const DashboardInvestView = ({ data }) => {
     },
     {
       reference: "REF-2024-006",
-      categorie: "🎓 Fraudes Académiques",
+      categorie: "🎓 Offre de formation irrégulière (non habilité)",
       date: "2024-01-02",
       demandeur: "Université Nationale",
       statut: "En cours",

@@ -7,9 +7,9 @@ const categories = [
     name: "Faux Diplômes",
   },
   {
-    id: "fraudes-academique",
+    id: "offre-formation-irreguliere",
     emoji: "🎓",
-    name: "Fraudes Académiques",
+    name: "Offre de formation irrégulière (non habilité)",
   },
   {
     id: "recrutements-irreguliers",
@@ -61,28 +61,30 @@ export default function AnalyseView({ selectedCategory }) {
       setIsLoading(true);
       setError(null);
       try {
-        console.log("🔄 Chargement des données depuis l'API pour AnalyseView...");
-        
-        const response = await fetch('http://localhost:8000/api/reports', {
-          method: 'GET',
+        console.log(
+          "🔄 Chargement des données depuis l'API pour AnalyseView..."
+        );
+
+        const response = await fetch("http://localhost:8000/api/reports", {
+          method: "GET",
           headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
+            Accept: "application/json",
+            "Content-Type": "application/json",
           },
         });
-        
+
         console.log("📋 Statut de la réponse:", response.status);
-        
+
         if (!response.ok) {
           throw new Error(`Erreur HTTP: ${response.status}`);
         }
-        
+
         const result = await response.json();
         console.log("📋 Réponse brute de l'API:", result);
-        
+
         // ADAPTATION À LA NOUVELLE STRUCTURE DE VOTRE API
         let reportsData = [];
-        
+
         if (result.success && result.data && result.data.reports) {
           // Structure: {success: true, data: {reports: [...], pagination: {...}}}
           reportsData = result.data.reports;
@@ -100,14 +102,14 @@ export default function AnalyseView({ selectedCategory }) {
         console.log("📊 Données à traiter pour AnalyseView:", reportsData);
 
         if (reportsData && reportsData.length > 0) {
-          const mappedReports = reportsData.map(report => {
+          const mappedReports = reportsData.map((report) => {
             console.log("📝 Traitement du rapport pour AnalyseView:", report);
 
             // Parser les fichiers
             let filesArray = [];
             try {
               if (report.files) {
-                if (typeof report.files === 'string') {
+                if (typeof report.files === "string") {
                   filesArray = JSON.parse(report.files);
                 } else if (Array.isArray(report.files)) {
                   filesArray = report.files;
@@ -124,31 +126,35 @@ export default function AnalyseView({ selectedCategory }) {
               date: report.created_at,
               category: report.category,
               status: report.status,
-              isAnonymous: report.isAnonymous || report.type === 'anonyme',
-              name: report.name || 'Anonyme',
-              email: report.email || '',
-              phone: report.phone || '',
-              description: report.description || report.title || 'Aucune description',
+              isAnonymous: report.isAnonymous || report.type === "anonyme",
+              name: report.name || "Anonyme",
+              email: report.email || "",
+              phone: report.phone || "",
+              description:
+                report.description || report.title || "Aucune description",
               filesCount: filesArray.length,
               files: filesArray,
-              region: report.region || 'Non spécifié',
-              city: report.city || 'Non spécifié',
+              region: report.region || "Non spécifié",
+              city: report.city || "Non spécifié",
               title: report.title,
-              type: report.type
+              type: report.type,
             };
 
             console.log("✅ Rapport mappé pour AnalyseView:", mappedReport);
             return mappedReport;
           });
 
-          console.log("🎉 Tous les rapports mappés pour AnalyseView:", mappedReports);
+          console.log(
+            "🎉 Tous les rapports mappés pour AnalyseView:",
+            mappedReports
+          );
           setReports(mappedReports);
         } else {
           console.log("ℹ️ Aucune donnée à afficher dans AnalyseView");
           setReports([]);
         }
       } catch (error) {
-        console.error('💥 Erreur lors de la récupération des données:', error);
+        console.error("💥 Erreur lors de la récupération des données:", error);
         setError(error.message);
       } finally {
         setIsLoading(false);
@@ -167,11 +173,17 @@ export default function AnalyseView({ selectedCategory }) {
 
   // Calcul des statistiques par catégorie basées sur les données réelles
   const calculateCategoryStats = (categoryId) => {
-    const categoryReports = reports.filter(report => report.category === categoryId);
+    const categoryReports = reports.filter(
+      (report) => report.category === categoryId
+    );
     const total = categoryReports.length;
-    const encours = categoryReports.filter(report => report.status === 'en_cours').length;
-    const resolus = categoryReports.filter(report => report.status === 'finalise').length;
-    
+    const encours = categoryReports.filter(
+      (report) => report.status === "en_cours"
+    ).length;
+    const resolus = categoryReports.filter(
+      (report) => report.status === "finalise"
+    ).length;
+
     return { total, encours, resolus };
   };
 
@@ -180,13 +192,13 @@ export default function AnalyseView({ selectedCategory }) {
 
   // Fonction pour formater la date
   const formatDate = (dateString) => {
-    if (!dateString) return '-';
+    if (!dateString) return "-";
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric'
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
       });
     } catch (e) {
       return dateString;
@@ -196,10 +208,10 @@ export default function AnalyseView({ selectedCategory }) {
   // Fonction pour obtenir le statut affichable
   const getDisplayStatus = (status) => {
     const statusMap = {
-      'en_cours': 'En cours',
-      'finalise': 'Résolu',
-      'doublon': 'Doublon',
-      'refuse': 'Refusé'
+      en_cours: "En cours",
+      finalise: "Résolu",
+      doublon: "Doublon",
+      refuse: "Refusé",
     };
     return statusMap[status] || status;
   };
@@ -222,7 +234,8 @@ export default function AnalyseView({ selectedCategory }) {
         item.region.includes(selectedProvince)) &&
       (selectedRegion === regions[0] || item.region.includes(selectedRegion)) &&
       (statut === "Tous" || getDisplayStatus(item.status) === statut) &&
-      (anonymat === "Tous" || getDisplayAnonymat(item.isAnonymous) === anonymat) &&
+      (anonymat === "Tous" ||
+        getDisplayAnonymat(item.isAnonymous) === anonymat) &&
       (startDate === "" || item.date >= startDate) &&
       (endDate === "" || item.date <= endDate)
   );
@@ -249,9 +262,25 @@ export default function AnalyseView({ selectedCategory }) {
       <div className="p-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-center py-12">
           <div className="flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <svg
+              className="animate-spin h-5 w-5 text-blue-600"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
             </svg>
             <span className="text-gray-600">Chargement des données...</span>
           </div>
@@ -264,7 +293,9 @@ export default function AnalyseView({ selectedCategory }) {
     return (
       <div className="p-6 max-w-7xl mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <div className="text-red-600 font-semibold mb-2">Erreur de chargement</div>
+          <div className="text-red-600 font-semibold mb-2">
+            Erreur de chargement
+          </div>
           <p className="text-red-600 text-sm mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -320,7 +351,9 @@ export default function AnalyseView({ selectedCategory }) {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white p-6 rounded-xl shadow-sm border text-center">
-            <div className="text-3xl font-bold text-gray-900">{categoryStats.total}</div>
+            <div className="text-3xl font-bold text-gray-900">
+              {categoryStats.total}
+            </div>
             <div className="text-gray-500 text-sm mt-1">
               Signalements totaux
             </div>
@@ -549,11 +582,11 @@ export default function AnalyseView({ selectedCategory }) {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          row.status === 'en_cours'
+                          row.status === "en_cours"
                             ? "bg-amber-100 text-amber-800"
-                            : row.status === 'finalise'
+                            : row.status === "finalise"
                             ? "bg-green-100 text-green-800"
-                            : row.status === 'doublon'
+                            : row.status === "doublon"
                             ? "bg-yellow-100 text-yellow-800"
                             : "bg-red-100 text-red-800"
                         }`}
