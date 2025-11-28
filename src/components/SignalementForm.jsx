@@ -26,15 +26,16 @@ const translations = {
   fr: {
     welcome: {
       title:
-        'Bienvenue sur la Plateforme nationale de signalement des fraudes et faux diplômes - "FOSIKA"',
+        'Bienvenue sur la Plateforme nationale de signalement des Fraudes académiques, faux diplômes et harcèlement - "FOSIKA""',
       subtitle:
-        "Sous l'égide du Ministère de l'Enseignement supérieur et de la Recherche scientifique (MESUPRES), en partenariat avec le BIANCO, la plateforme FOSIKA s'inscrit dans la volonté nationale d'assainir le système d'enseignement supérieur et de restaurer la confiance du public.",
+        "Sous l'égide du MINISTERE DE L'ENSEIGNEMENT SUPERIERE ET DE LA RECHERCHE SCIENTIFIQUE (MESUPRES), en partenariat avec le BIANCO, la plateforme FOSIKA s'inscrit dans la volonté nationale d'assainir le système d'enseignement supérieur et de restaurer la confiance du public.",
       initiative:
         "Cette initiative permet de signaler en toute confidentialité tout cas de :",
       cases: [
         "Faux diplômes utilisés lors des recrutements,",
         "Faux diplômes dans le but d'obtenir la validation d'une candidature ou une évolution dans une carrière professionnelle,",
-        "Diplômes et attestations falsifiés.",
+        "Diplômes et attestations falsifiés,",
+        "Violence sexuelle constatée.",
       ],
       contribute: "Par vos signalements, vous contribuez à :",
       benefits: [
@@ -46,7 +47,6 @@ const translations = {
         "Votre vigilance est un acte citoyen. Ensemble, protégeons la crédibilité de nos universités et la dignité de notre système éducatif.",
       slogan: "Opération FOSIKA : assainir, protéger, refonder.",
       submitBtn: "Soumettre un signalement",
-      clickHere: "Cliquez ici",
     },
     choice: {
       title: "Choisissez",
@@ -90,7 +90,7 @@ const translations = {
       title: "Pièces justificatives",
       attachments: "Pièces jointes (photos, vidéos, documents) - Obligatoire",
       attachmentsInfo:
-        "Formats acceptés: JPG, JPEG, PNG, MP4, PDF • Taille max: 25 Mo par fichier • Au moins 1 fichier requis",
+        "Formats acceptés: JPG, JPEG, PNG, MP4, PDF • Taille max: 8 Mo • Au moins 1 fichier requis",
       uploadLabel: "Cliquez pour ajouter des fichiers",
       uploadSubtext: "ou glissez-déposez vos fichiers ici",
       filesAdded: "Fichiers ajoutés",
@@ -105,7 +105,7 @@ const translations = {
       thanks: "Nous vous remercions pour votre contribution",
       reference: "Référence de votre dossier",
       tracking:
-        "Vous pouvez suivre l'état de votre dossier (en cours, finalisé, doublon ou refusé) via cette référence.",
+        "Vous pouvez suivre l'état de votre dossier via cette référence.",
       trackButton: "Suivre mon dossier",
       home: "Retour à l'accueil",
     },
@@ -136,15 +136,16 @@ const translations = {
   mg: {
     welcome: {
       title:
-        "Tongasoa eto amin'ny tambajotra nasionaly miady amin'ny trangana HOSOKA sy DIPLAOMA Sandoka - \"FOSIKA\"",
+        "Tongasoa eto amin'ny tambajotra nasionaly miady amin'ny trangana HOSOKA sy DIPLAOMA sandoka ary HERISETRA ara-pananahana - \"FOSIKA\"",
       subtitle:
-        "Eo ambany fiahian'ny Ministeran'ny Fampianarana Ambony sy Fikarohana Ara-tsiansa (MESUPRES), sy ny fiaraha-miasa amin'ny Birao Mahaleo-tena Miady amin'ny Kolikoly \"BIANCO\", dia tafiditra ao anatin'ny ezaka nasionaly hanadiovana ny rafi-pampianarana ambony sy hamerenana ny fitokisan'ny vahoaka ny Tambanjotra \"FOSIKA\".",
+        "Eo ambany fiahian'ny MINISTERAN'NY FAMPIANARANA AMBONY SY FIKAROHANA ARA-TSIANSA (MESUPRES), sy ny fiaraha-miasa amin'ny Birao Mahaleo-tena Miady amin'ny Kolikoly \"BIANCO\", dia tafiditra ao anatin'ny ezaka nasionaly hanadiovana ny rafi-pampianarana ambony sy hamerenana ny fitokisan'ny vahoaka ny Tambanjotra \"FOSIKA\".",
       initiative:
-        "Ity sehatra ity dia natao ahafahana manangom-baovao am-fitokisana momba ireto tranga manaraka ireto :",
+        "Ity sehatra ity dia natao ahafahana manangom-baovao am-pitokisana momba ireto tranga manaraka ireto :",
       cases: [
         "Diplaoma sandoka ampiasaina amin'ny fandraisana mpiasa,",
         "Diplaoma sandoka ampiasaina mba hahazoana fanamarinana ny fangatahana na fankatoavana ho amin'ny fisondrotana ara-kasa,",
-        "Taratasy fanamarinana sandoka.",
+        "Taratasy fanamarinana sandoka,",
+        "Herisetra ara-nofo na ara-pananahana.",
       ],
       contribute:
         "Amin'ny fanamarihana sy fanairana ataonao, dia mandray anjara amin'ireto manaraka ireto ianao :",
@@ -154,10 +155,9 @@ const translations = {
         "Fiarovana ny hasin'ny fahaiza-manao sy ny fahalalana.",
       ],
       vigilance:
-        "Ny fahamalinanao dia adidy amin'ny maha-olom-firenena. Isika miaraka no hiaro ny hasin'ny anjerimanontolo sy ny rafi-pampianarana.",
+        "Ny fahamalinanao dia adidy amin'ny maha olom-pirenena. Isika miaraka no hiaro ny hasin'ny anjerimanontolo sy ny rafi-pampianarana.",
       slogan: "HETSIKA FOSIKA : manadio, miaro, manavao.",
       submitBtn: "HANDEFA FITARAINANA",
-      clickHere: "TSINDRIO ETO",
     },
     choice: {
       title: "Safidio",
@@ -217,13 +217,13 @@ const translations = {
       thanks: "Ankasitrahanay feno ianao",
       reference: "Référence an'ilay antontataratasy",
       tracking:
-        "Afaka manaraka ny fivoaran'ny dosierao (Voaray, Vita, Mitovy na Nolavina) amin'ity référence ity.",
+        "Afaka manaraka ny fivoaran'ny dosierao amin'ity référence ity.",
       trackButton: "Hanaraka ny antontataratasy",
       home: "Hiverina any am-piandohana",
     },
     categories: {
       "faux-diplomes": "Diplaoma sandoka",
-      "Offre de formation irrégulière ( non habilité)":
+      "Offre de formation irrégulière ( non habilitée)":
         "Tolotra fiofanana tsy ara-dalàna (tsy nahazoana alalana)",
       "recrutements-irreguliers": "Fampidirana mpiasa tsy ara-dalàna",
       harcelement: "Fanararaotana",
