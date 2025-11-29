@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API from "../config/axios";
 import HeaderTeam from "./HeaderTeam";
 import SidebarAgent from "./SidebarAgent";
 import DashboardView from "./views/DashboardView"; // Changer DashboardAgentView par DashboardView
@@ -37,85 +38,27 @@ const DashboardAgent = ({ onDeconnexion }) => {
     checkAuth();
   }, []);
 
-  // Charger les données de l'agent si authentifié
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchAgentData();
-    }
-  }, [isAuthenticated, avatarUpdated]);
-
-  // Vérifier périodiquement la validité de la session
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const checkSession = async () => {
-      const token = teamUtils.getAuthToken("agent");
-      if (!token) {
-        handleSessionExpired();
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          "http://localhost:8000/api/agent/profile",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            handleSessionExpired();
-          }
-        }
-      } catch (error) {
-      }
-    };
-
-    const interval = setInterval(checkSession, 30000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
-
   const fetchAgentData = async () => {
-    const token = teamUtils.getAuthToken("agent");
-    if (!token) {
-      handleSessionExpired();
-      return;
-    }
-
     try {
       setIsLoading(true);
+      const response = await API.get("/agent/profile");
 
-      const response = await fetch("http://localhost:8000/api/agent/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-
-        if (result.success) {
-          setAgentData(result.data);
-          setData(result.data);
-        } else {
-        }
-      } else if (response.status === 401) {
-        handleSessionExpired();
-      } else {
+      if (response.data.success) {
+        setAgentData(response.data.data);
+        setData(response.data.data);
       }
     } catch (error) {
+      if (error.response?.status === 401) {
+        handleSessionExpired();
+      } else {
+        console.error("Erreur lors du chargement des données:", error);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSessionExpired = () => {
-
     // Nettoyer le stockage
     teamUtils.logout("agent");
     setIsAuthenticated(false);
@@ -133,7 +76,54 @@ const DashboardAgent = ({ onDeconnexion }) => {
     }
   };
 
+  // Charger les données de l'agent si authentifié
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchAgentData();
+    }
+  }, [isAuthenticated, avatarUpdated]);
+
+  // Vérifier périodiquement la validité de la session
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let interval;
+    let timeoutId;
+
+    const checkSession = async () => {
+      try {
+        const response = await API.get("/agent/profile");
+        if (!response.data.success) {
+          handleSessionExpired();
+        }
+      } catch (error) {
+        if (error.response?.status === 401) {
+          handleSessionExpired();
+          if (interval) clearInterval(interval);
+        } else if (error.response?.status === 429) {
+          // Rate limiting - augmenter le délai
+          console.warn(
+            "⚠️ Rate limit détecté lors de la vérification de session"
+          );
+          if (interval) clearInterval(interval);
+          // Attendre 60 secondes avant de réessayer
+          timeoutId = setTimeout(() => {
+            interval = setInterval(checkSession, 30000);
+          }, 60000);
+        }
+      }
+    };
+
+    interval = setInterval(checkSession, 30000);
+
+    return () => {
+      if (interval) clearInterval(interval);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isAuthenticated]);
+
   const handleAvatarUpdate = () => {
+    // Trigger fetchAgentData by updating the trigger state
     setAvatarUpdated((prev) => prev + 1);
     setHeaderAvatarUpdate((prev) => prev + 1);
   };

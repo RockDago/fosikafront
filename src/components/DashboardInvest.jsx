@@ -1,5 +1,6 @@
 // DashboardInvest.jsx
 import React, { useState, useEffect } from "react";
+import API from "../config/axios";
 import HeaderTeam from "./HeaderTeam";
 import SidebarInvest from "./SidebarInvest";
 import DashboardInvestView from "./views/DashboardInvestView";
@@ -47,35 +48,38 @@ const DashboardInvest = ({ onDeconnexion }) => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    let interval;
+    let timeoutId;
+
     const checkSession = async () => {
-      const token = teamUtils.getAuthToken("investigateur");
-      if (!token) {
-        handleSessionExpired();
-        return;
-      }
-
       try {
-        const response = await fetch(
-          "http://localhost:8000/api/investigateur/profile",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            handleSessionExpired();
-          }
+        const response = await API.get("/investigateur/profile");
+        if (!response.data.success) {
+          handleSessionExpired();
         }
       } catch (error) {
+        if (error.response?.status === 401) {
+          handleSessionExpired();
+          if (interval) clearInterval(interval);
+        } else if (error.response?.status === 429) {
+          // Rate limiting - augmenter le délai
+          console.warn(
+            "⚠️ Rate limit détecté lors de la vérification de session"
+          );
+          if (interval) clearInterval(interval);
+          // Attendre 60 secondes avant de réessayer
+          timeoutId = setTimeout(() => {
+            interval = setInterval(checkSession, 30000);
+          }, 60000);
+        }
       }
     };
 
-    const interval = setInterval(checkSession, 30000);
-    return () => clearInterval(interval);
+    interval = setInterval(checkSession, 30000);
+    return () => {
+      if (interval) clearInterval(interval);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [isAuthenticated]);
 
   const fetchInvestData = async () => {
@@ -88,36 +92,24 @@ const DashboardInvest = ({ onDeconnexion }) => {
     try {
       setIsLoading(true);
 
-      const response = await fetch(
-        "http://localhost:8000/api/investigateur/profile",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
+      const response = await API.get("/investigateur/profile");
 
-      if (response.ok) {
-        const result = await response.json();
-
-        if (result.success) {
-          setInvestData(result.data);
-          setData(result.data);
-        } else {
-        }
-      } else if (response.status === 401) {
-        handleSessionExpired();
-      } else {
+      if (response.data.success) {
+        setInvestData(response.data.data);
+        setData(response.data.data);
       }
     } catch (error) {
+      if (error.response?.status === 401) {
+        handleSessionExpired();
+      } else {
+        console.error("Erreur lors du chargement des données:", error);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSessionExpired = () => {
-
     // Nettoyer le stockage
     teamUtils.logout("investigateur");
     setIsAuthenticated(false);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
+import API from "../../config/axios";
 
 const JournalView = () => {
-  const [currentTab, setCurrentTab] = useState("systeme");
   const [filters, setFilters] = useState({
     user: "",
     action: "",
@@ -26,23 +26,12 @@ const JournalView = () => {
 
   const fetchAuditData = async () => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const response = await fetch("http://localhost:8000/api/journal-audit", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setAuditData(result.data);
-        }
+      const response = await API.get("/journal-audit");
+      if (response.data.success) {
+        setAuditData(response.data.data);
       }
     } catch (error) {
+      console.error("Erreur lors du chargement des données d'audit:", error);
     } finally {
       setIsLoading(false);
     }
@@ -54,30 +43,19 @@ const JournalView = () => {
 
   const exportAudit = async () => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const response = await fetch(
-        "http://localhost:8000/api/journal-audit/export",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: currentTab,
-          }),
-        }
-      );
+      const response = await API.post("/journal-audit/export", {
+        type: "systeme",
+      });
 
-      if (response.ok) {
-        const result = await response.json();
-        alert(`Export réussi! ${result.data_count} enregistrements préparés.`);
+      if (response.data.success) {
+        alert(
+          `Export réussi! ${response.data.data_count} enregistrements préparés.`
+        );
       } else {
         alert("Erreur lors de l'export");
       }
     } catch (error) {
+      console.error("Erreur lors de l'export:", error);
       alert("Erreur lors de l'export");
     }
   };

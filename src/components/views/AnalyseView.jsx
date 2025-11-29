@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API from "../../config/axios";
 
 const categories = [
   {
@@ -61,40 +62,30 @@ export default function AnalyseView({ selectedCategory }) {
       setIsLoading(true);
       setError(null);
       try {
-
-        const response = await fetch("http://localhost:8000/api/reports", {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-
-        const result = await response.json();
+        const response = await API.get("/reports");
 
         // ADAPTATION À LA NOUVELLE STRUCTURE DE VOTRE API
         let reportsData = [];
 
-        if (result.success && result.data && result.data.reports) {
+        if (
+          response.data.success &&
+          response.data.data &&
+          response.data.data.reports
+        ) {
           // Structure: {success: true, data: {reports: [...], pagination: {...}}}
-          reportsData = result.data.reports;
-        } else if (result.success && Array.isArray(result.data)) {
+          reportsData = response.data.data.reports;
+        } else if (response.data.success && Array.isArray(response.data.data)) {
           // Structure alternative: {success: true, data: [...]}
-          reportsData = result.data;
-        } else if (Array.isArray(result)) {
+          reportsData = response.data.data;
+        } else if (Array.isArray(response.data)) {
           // Structure: [...] (tableau direct)
-          reportsData = result;
+          reportsData = response.data;
         } else {
           reportsData = [];
         }
 
         if (reportsData && reportsData.length > 0) {
           const mappedReports = reportsData.map((report) => {
-
             // Parser les fichiers
             let filesArray = [];
             try {
@@ -105,8 +96,7 @@ export default function AnalyseView({ selectedCategory }) {
                   filesArray = report.files;
                 }
               }
-            } catch (e) {
-            }
+            } catch (e) {}
 
             // Construction de l'objet rapport adapté pour AnalyseView
             const mappedReport = {

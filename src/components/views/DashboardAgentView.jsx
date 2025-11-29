@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API from "../../config/axios";
 
 const DashboardAgentView = ({ data }) => {
   const [stats, setStats] = useState({
@@ -18,23 +19,12 @@ const DashboardAgentView = ({ data }) => {
 
   const fetchAgentStats = async () => {
     try {
-      const token =
-        localStorage.getItem("agent_token") ||
-        sessionStorage.getItem("agent_token");
-      const response = await fetch("http://localhost:8000/api/agent/stats", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setStats(result.data);
-        }
+      const response = await API.get("/agent/stats");
+      if (response.data.success) {
+        setStats(response.data.data);
       }
     } catch (error) {
+      console.error("Erreur lors du chargement des stats:", error);
       // Données simulées en attendant l'API
       setStats({
         missionsEnCours: 3,
@@ -49,26 +39,12 @@ const DashboardAgentView = ({ data }) => {
 
   const fetchRecentMissions = async () => {
     try {
-      const token =
-        localStorage.getItem("agent_token") ||
-        sessionStorage.getItem("agent_token");
-      const response = await fetch(
-        "http://localhost:8000/api/agent/missions/recent",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setMissionsRecentes(result.data);
-        }
+      const response = await API.get("/agent/missions/recent");
+      if (response.data.success) {
+        setMissionsRecentes(response.data.data);
       }
     } catch (error) {
+      console.error("Erreur lors du chargement des missions:", error);
       // Données simulées en attendant l'API
       setMissionsRecentes([
         {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API from "../../config/axios";
 import {
   Bell,
   RefreshCw,
@@ -47,28 +48,12 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
 
   const fetchAllNotifications = async () => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      if (!token) return;
-
-      const response = await fetch(
-        "http://localhost:8000/api/notifications/all",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setNotifications(result.data || []);
-        }
+      const response = await API.get("/notifications/all");
+      if (response.data.success) {
+        setNotifications(response.data.data || []);
       }
     } catch (error) {
+      console.error("Erreur lors du chargement des notifications:", error);
     } finally {
       setIsLoading(false);
     }
@@ -76,21 +61,12 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
 
   const markAsRead = async (notificationId) => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const response = await fetch(
-        `http://localhost:8000/api/notifications/${notificationId}/read`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
+      const response = await API.post(
+        `/notifications/${notificationId}/read`,
+        {}
       );
 
-      if (response.ok) {
+      if (response.data.success) {
         setNotifications((prev) =>
           prev.map((notif) =>
             notif.id === notificationId ? { ...notif, status: "read" } : notif
@@ -101,26 +77,15 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         }
       }
     } catch (error) {
+      console.error("Erreur lors du marquage comme lu:", error);
     }
   };
 
   const markAllAsRead = async () => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const response = await fetch(
-        "http://localhost:8000/api/notifications/read-all",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
+      const response = await API.post("/notifications/read-all", {});
 
-      if (response.ok) {
+      if (response.data.success) {
         setNotifications((prev) =>
           prev.map((notif) => ({
             ...notif,
@@ -129,26 +94,15 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         );
       }
     } catch (error) {
+      console.error("Erreur lors du marquage de tout comme lu:", error);
     }
   };
 
   const deleteNotification = async (notificationId) => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const response = await fetch(
-        `http://localhost:8000/api/notifications/${notificationId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
+      const response = await API.delete(`/notifications/${notificationId}`);
 
-      if (response.ok) {
+      if (response.data.success) {
         setNotifications((prev) =>
           prev.filter((notif) => notif.id !== notificationId)
         );
@@ -158,6 +112,7 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         }
       }
     } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
     }
   };
 
@@ -317,24 +272,10 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
 
   const fetchSignalementDetails = async (reference) => {
     try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      const response = await fetch(
-        `http://localhost:8000/api/reports/${reference}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        return result.success ? result.data : null;
-      }
+      const response = await API.get(`/reports/${reference}`);
+      return response.data.success ? response.data.data : null;
     } catch (error) {
+      console.error("Erreur lors du chargement des détails:", error);
     }
     return null;
   };

@@ -43,15 +43,36 @@ const DashboardAdmin = ({ onDeconnexion }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSignalement, setSelectedSignalement] = useState(null);
   const [sessionCheckInterval, setSessionCheckInterval] = useState(null);
+  const [sessionCheckFailures, setSessionCheckFailures] = useState(0);
 
   // Vérifier périodiquement la validité de la session
   useEffect(() => {
     const checkSession = async () => {
       try {
         await axios.get("/admin/check");
+        // Réinitialiser le compteur d'erreurs en cas de succès
+        setSessionCheckFailures(0);
       } catch (error) {
         if (error.response?.status === 401) {
           handleSessionExpired();
+          // Arrêter les vérifications après déconnexion
+          if (sessionCheckInterval) clearInterval(sessionCheckInterval);
+        } else if (error.response?.status === 429) {
+          // Rate limiting - augmenter le délai entre les vérifications
+          console.warn(
+            "⚠️ Rate limit détecté lors de la vérification de session"
+          );
+          setSessionCheckFailures((prev) => prev + 1);
+          // Arrêter les vérifications temporairement en cas de rate limit
+          if (sessionCheckInterval) {
+            clearInterval(sessionCheckInterval);
+            // Réessayer après 60 secondes
+            const timeoutId = setTimeout(() => {
+              const newInterval = setInterval(checkSession, 30000);
+              setSessionCheckInterval(newInterval);
+            }, 60000);
+            setSessionCheckInterval(timeoutId);
+          }
         }
       }
     };
@@ -62,7 +83,7 @@ const DashboardAdmin = ({ onDeconnexion }) => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [onDeconnexion]);
+  }, [onDeconnexion, sessionCheckInterval]);
 
   // Écouter les événements de déconnexion depuis d'autres onglets
   useEffect(() => {

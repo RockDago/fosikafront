@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import API from "../../config/axios";
 import Chart from "chart.js/auto";
 import { useNavigate } from "react-router-dom";
 
@@ -121,26 +122,11 @@ export default function DashboardView() {
     try {
       setLoading(true);
 
-      const token = localStorage.getItem("admin_token");
+      const response = await API.get("/reports?per_page=1000");
 
-      const response = await fetch(
-        "http://localhost:8000/api/reports?per_page=1000",
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const allReportsData = Array.isArray(result.data) ? result.data : [];
+      const allReportsData = Array.isArray(response.data.data)
+        ? response.data.data
+        : [];
       setAllReports(allReportsData);
 
       if (allReportsData.length > 0) {
@@ -215,7 +201,7 @@ export default function DashboardView() {
   const updateCategoriesWithRealData = (statsData, reports) => {
     const updatedCategories = defaultCategoryStructure.map((category) => {
       const realTotal = statsData.by_category?.[category.id] || 0;
-      
+
       // Calcul réel des en cours et résolus par catégorie
       const categoryReports = reports.filter(
         (report) => report.category === category.id

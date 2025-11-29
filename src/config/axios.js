@@ -248,6 +248,14 @@ API.interceptors.response.use(
             })
           );
         }
+      } else if (error.response.status === 429) {
+        // Trop de requêtes - rate limiting
+        console.warn(
+          "⚠️ Rate limiting détecté (429) - Trop de requêtes",
+          error.config?.url
+        );
+        error.message =
+          "Trop de requêtes. Veuillez attendre quelques secondes avant de réessayer.";
       }
     }
 

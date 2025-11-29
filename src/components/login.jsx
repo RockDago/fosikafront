@@ -178,7 +178,7 @@ const Login = () => {
       console.log("🔍 Vérification de l'authentification...");
 
       // ✅ Vérification des tokens Team
-      const possibleTeamRoles = ["agent", "investigateur", "admin"];
+      const possibleTeamRoles = ["agent", "investigateur"];
       for (const role of possibleTeamRoles) {
         const currentToken = teamUtils.getAuthToken(role);
         const currentUserType = (
@@ -200,6 +200,8 @@ const Login = () => {
           } catch (error) {
             console.log(`❌ Token ${role} invalide, déconnexion...`);
             teamUtils.logout(role);
+            // Éviter les appels API trop rapides - attendre 1 seconde
+            await new Promise((resolve) => setTimeout(resolve, 1000));
           }
         }
       }
@@ -227,7 +229,17 @@ const Login = () => {
       }
     };
 
-    checkAuth();
+    // Ajouter un délai avant de vérifier l'authentification pour éviter les requêtes trop rapides
+    const timeoutId = setTimeout(() => {
+      checkAuth().catch((err) => {
+        console.error(
+          "❌ Erreur lors de la vérification de l'authentification:",
+          err
+        );
+      });
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
@@ -477,7 +489,7 @@ const Login = () => {
             <p>
               Mode: {rememberMe ? "Session persistante" : "Session temporaire"}
             </p>
-            <p>  copyright @ daaq-Mesupres 2025</p>
+            <p> copyright @ daaq-Mesupres 2025</p>
           </div>
         </div>
       </div>
