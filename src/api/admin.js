@@ -1,10 +1,16 @@
 import axios from "../config/axios";
 
+// ==================== ADMIN API ====================
 export const adminAPI = {
   // ==================== AUTHENTIFICATION ====================
   login: async (credentials) => {
     try {
       const response = await axios.post("/admin/login", credentials);
+      // Injecter le token dans l'axios instance
+      if (response.data.success && response.data.data?.token) {
+        const token = response.data.data.token;
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      }
       return response.data;
     } catch (error) {
       throw error;
@@ -14,8 +20,10 @@ export const adminAPI = {
   logout: async () => {
     try {
       const response = await axios.post("/admin/logout");
+      adminUtils.logout(); // nettoyer le storage et le header
       return response.data;
     } catch (error) {
+      adminUtils.logout();
       throw error;
     }
   },
@@ -94,7 +102,7 @@ export const adminAPI = {
     }
   },
 
-  // ==================== RAPPORTS (REPORTS) ====================
+  // ==================== RAPPORTS ====================
   getReports: async (params = {}) => {
     try {
       const response = await axios.get("/reports", { params });
@@ -164,7 +172,9 @@ export const adminAPI = {
   // ==================== SESSION & SÉCURITÉ ====================
   validateSession: async (sessionId) => {
     try {
-      const response = await axios.post("/admin/validate-session", { session_id: sessionId });
+      const response = await axios.post("/admin/validate-session", {
+        session_id: sessionId,
+      });
       return response.data;
     } catch (error) {
       throw error;
@@ -174,58 +184,63 @@ export const adminAPI = {
   refreshToken: async () => {
     try {
       const response = await axios.post("/admin/refresh-token");
+      // Mettre à jour le header après refresh
+      if (response.data.success && response.data.data?.token) {
+        const token = response.data.data.token;
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      }
       return response.data;
     } catch (error) {
       throw error;
     }
-  }
+  },
 };
 
 // ==================== UTILITAIRES ====================
 export const adminUtils = {
-  // Stocker les données d'authentification
   setAuthData: (token, userData, rememberMe = false) => {
     const storage = rememberMe ? localStorage : sessionStorage;
     storage.setItem("admin_token", token);
     storage.setItem("admin_user", JSON.stringify(userData));
     storage.setItem("user_type", "admin");
-    
+
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   },
 
-  // Récupérer le token
   getAuthToken: () => {
-    return localStorage.getItem("admin_token") || sessionStorage.getItem("admin_token");
+    return (
+      localStorage.getItem("admin_token") ||
+      sessionStorage.getItem("admin_token")
+    );
   },
 
-  // Récupérer les données utilisateur
   getAuthUser: () => {
-    const userData = localStorage.getItem("admin_user") || sessionStorage.getItem("admin_user");
+    const userData =
+      localStorage.getItem("admin_user") ||
+      sessionStorage.getItem("admin_user");
     return userData ? JSON.parse(userData) : null;
   },
 
-  // Vérifier si l'admin est authentifié
   isAuthenticated: () => {
     const token = adminUtils.getAuthToken();
     const user = adminUtils.getAuthUser();
     return !!(token && user);
   },
 
-  // Déconnexion
   logout: () => {
-    localStorage.removeItem("admin_token");
-    localStorage.removeItem("admin_user");
-    localStorage.removeItem("user_type");
-    sessionStorage.removeItem("admin_token");
-    sessionStorage.removeItem("admin_user");
-    sessionStorage.removeItem("user_type");
-    
+    const keys = ["admin_token", "admin_user", "user_type"];
+    keys.forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+    delete axios.defaults.headers.common["Authorization"];
   },
 
-  // Vérifier le type d'utilisateur
   isAdmin: () => {
-    const userType = localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
+    const userType =
+      localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
     return userType === "admin";
-  }
+  },
 };
 
 export default adminAPI;

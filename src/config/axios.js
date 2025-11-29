@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_URL = "https://fosika.mesupres.mg/api";
+export const API_URL = "http://127.0.0.1:8000/api";
 
 // --- Création de l'instance Axios ---
 const API = axios.create({
