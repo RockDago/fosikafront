@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import {
   Bell,
   ChevronDown,
-  X,
   FileText,
   AlertTriangle,
   CheckCircle,
 } from "lucide-react";
+import API from "../config/axios";
+import LogoFosika from "../assets/images/logo fosika.png";
 
 const Header = ({
   onNavigateToNotifications,
@@ -23,6 +24,19 @@ const Header = ({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Couleurs pour admin (identique au HeaderTeam)
+  const roleColors = {
+    admin: {
+      bg: "bg-blue-600",
+      text: "text-blue-600",
+      light: "bg-blue-50",
+      border: "border-blue-200",
+      badge: "bg-blue-100 text-blue-800",
+    }
+  };
+
+  const currentRole = roleColors.admin;
 
   useEffect(() => {
     fetchAdminData();
@@ -41,24 +55,17 @@ const Header = ({
         sessionStorage.getItem("admin_token");
       if (!token) return;
 
-      const response = await fetch(
-        "http://localhost:8000/api/notifications/recent",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
+      const response = await API.get("/notifications/recent-by-role", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setRecentNotifications(result.data || []);
-          setUnreadCount(
-            result.data?.filter((n) => n.status === "active").length || 0
-          );
-        }
+      if (response.data.success) {
+        setRecentNotifications(response.data.data || []);
+        setUnreadCount(
+          response.data.data?.filter((n) => n.status === "active").length || 0
+        );
       }
     } catch (error) {
       console.error("Erreur chargement notifications récentes:", error);
@@ -70,18 +77,17 @@ const Header = ({
       const token =
         localStorage.getItem("admin_token") ||
         sessionStorage.getItem("admin_token");
-      const response = await fetch(
-        `http://localhost:8000/api/notifications/${notificationId}/read`,
+      const response = await API.post(
+        `/notifications/${notificationId}/read`,
+        {},
         {
-          method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
-            Accept: "application/json",
           },
         }
       );
 
-      if (response.ok) {
+      if (response.status === 200) {
         setRecentNotifications((prev) =>
           prev.map((notif) =>
             notif.id === notificationId ? { ...notif, status: "read" } : notif
@@ -101,22 +107,30 @@ const Header = ({
         sessionStorage.getItem("admin_token");
       if (!token) return;
 
-      const response = await fetch("http://localhost:8000/api/admin/profile", {
+      console.log("🔄 Fetching admin profile for header...");
+
+      const response = await API.get("/admin/profile", {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
-        cache: "no-cache",
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status === 200) {
+        const data = response.data;
         if (data.success) {
+          console.log("✅ Admin data loaded for header:", data.data);
           setLocalAdminData(data.data);
+
+          // Notifier le parent si l'avatar a changé
+          if (onAvatarUpdate && data.data.avatar) {
+            onAvatarUpdate(data.data.avatar);
+          }
         }
+      } else {
+        console.error("❌ Failed to fetch admin profile:", response.status);
       }
     } catch (error) {
-      console.error("Error loading admin data:", error);
+      console.error("Error loading admin profile:", error);
     }
   };
 
@@ -160,18 +174,37 @@ const Header = ({
     const data = localAdminData || adminData;
     if (!data) return "A";
 
-    if (data.first_name && data.last_name) {
-      return `${data.first_name[0]}${data.last_name[0]}`.toUpperCase();
-    }
-    return data.name ? data.name.substring(0, 2).toUpperCase() : "A";
+    // Utiliser le nom complet pour les initiales (comme HeaderTeam)
+    return data.name
+      ? data.name.substring(0, 2).toUpperCase()
+      : "A";
   };
 
   const getAvatarUrl = () => {
     const data = localAdminData || adminData;
     if (!data?.avatar) return null;
 
-    const separator = data.avatar.includes("?") ? "&" : "?";
-    return `${data.avatar}${separator}t=${Date.now()}`;
+    // Ajouter un timestamp pour éviter le cache (comme HeaderTeam)
+    let avatarUrl = data.avatar;
+    if (!avatarUrl.includes("http")) {
+      // Si c'est un chemin relatif, ajouter l'URL de base
+      avatarUrl = `${API.defaults.baseURL}${
+        avatarUrl.startsWith("/") ? "" : "/"
+      }${avatarUrl}`;
+    }
+
+    const separator = avatarUrl.includes("?") ? "&" : "?";
+    return `${avatarUrl}${separator}v=${avatarVersion}`;
+  };
+
+  const getDisplayName = () => {
+    const data = localAdminData || adminData;
+    return data?.name || "Administrateur";
+  };
+
+  const getDisplayEmail = () => {
+    const data = localAdminData || adminData;
+    return data?.email || "admin@fosika.gov";
   };
 
   const handleLogout = () => {
@@ -197,51 +230,66 @@ const Header = ({
   const handleViewAllNotifications = () => {
     setNotificationDropdownOpen(false);
     if (onNavigateToNotifications) {
-      // Passer un objet vide pour indiquer qu'on veut la liste
       onNavigateToNotifications({ view: "list" });
+    } else {
+      console.warn("onNavigateToNotifications n'est pas défini");
+      alert(
+        "Page des notifications - Fonctionnalité en cours de développement"
+      );
     }
   };
 
   const handleNotificationClick = async (notification) => {
-    // Marquer comme lu si nécessaire
     if (notification.status === "active") {
       await markNotificationAsRead(notification.id);
     }
 
     setNotificationDropdownOpen(false);
     if (onNavigateToNotifications) {
-      // Passer la notification pour ouvrir directement le détail
       onNavigateToNotifications({
         view: "detail",
         notification: notification,
       });
+    } else {
+      console.warn("onNavigateToNotifications n'est pas défini");
+      alert(`Détail de la notification: ${notification.titre}`);
     }
   };
 
   const handleAvatarError = (e) => {
-    console.error("Avatar image failed to load");
+    console.error("Avatar image failed to load, using initials");
+    e.target.style.display = "none";
+    // Forcer le re-render pour afficher les initiales
+    setAvatarVersion((prev) => prev + 1);
+  };
+
+  const handleAvatarLoad = (e) => {
+    console.log("Avatar loaded successfully");
   };
 
   const avatarUrl = getAvatarUrl();
-  const displayData = localAdminData || adminData;
+  const displayName = getDisplayName();
+  const displayEmail = getDisplayEmail();
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-50">
-        <div className="flex items-center">
-          <div className="text-2xl font-bold text-blue-600 font-serif">
-            FOSIKA
-          </div>
+      <header className="fixed top-0 left-0 right-0 h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-50">
+        <div className="flex items-center ml-6">
+          <img
+            src={LogoFosika}
+            alt="FOSIKA Logo"
+            className="w-32 h-32 object-contain"
+          />
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Notification Bell */}
+          {/* Notification Bell - Même style que HeaderTeam */}
           <div className="relative">
             <button
               onClick={() =>
                 setNotificationDropdownOpen(!notificationDropdownOpen)
               }
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative"
+              className="p-3 rounded-lg hover:bg-gray-100 transition-colors relative"
             >
               <Bell className="w-6 h-6 text-gray-600" />
               {unreadCount > 0 && (
@@ -268,7 +316,7 @@ const Header = ({
                       key={notification.id}
                       className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
                         notification.status === "active"
-                          ? "bg-blue-50 border-l-2 border-l-blue-500"
+                          ? `${currentRole.light} border-l-2 ${currentRole.border}`
                           : ""
                       }`}
                       onClick={() => handleNotificationClick(notification)}
@@ -283,7 +331,9 @@ const Header = ({
                               {notification.titre}
                             </div>
                             {notification.status === "active" && (
-                              <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
+                              <span
+                                className={`w-2 h-2 ${currentRole.bg} rounded-full flex-shrink-0 mt-1`}
+                              ></span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600 mb-1 line-clamp-2">
@@ -317,30 +367,41 @@ const Header = ({
             )}
           </div>
 
-          {/* User Profile */}
+          {/* User Profile - Même style que HeaderTeam */}
           <div className="relative">
             <button
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative">
+              <div
+                className={`w-10 h-10 ${currentRole.bg} rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative`}
+              >
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Avatar"
                     className="w-full h-full object-cover"
                     onError={handleAvatarError}
-                    key={avatarVersion}
+                    onLoad={handleAvatarLoad}
+                    key={`avatar-${avatarVersion}`}
                   />
-                ) : (
-                  <span className="flex items-center justify-center w-full h-full">
-                    {getInitials()}
-                  </span>
-                )}
+                ) : null}
+                <span
+                  className={`flex items-center justify-center w-full h-full ${
+                    avatarUrl ? "hidden" : ""
+                  }`}
+                >
+                  {getInitials()}
+                </span>
               </div>
-              <span className="text-sm font-medium text-gray-700">
-                {displayData?.name || "Admin"}
-              </span>
+              <div className="text-left">
+                <span className="text-sm font-medium text-gray-700 block">
+                  {displayName}
+                </span>
+                <span className="text-xs text-gray-500 block">
+                  {displayEmail}
+                </span>
+              </div>
               <ChevronDown className="w-4 h-4 text-gray-500" />
             </button>
 

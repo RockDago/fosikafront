@@ -412,19 +412,12 @@ function CreateUserModal({ open, onClose, selectedRole, onUserCreated }) {
   }, [open, selectedRole]);
 
   const getAvailableDepartements = () => {
-    console.log("🔍 DEBUG getAvailableDepartements:", {
-      role_id: formData.role_id,
-      availableRoles: availableRoles,
-      type_role_id: typeof formData.role_id,
-    });
 
     if (!formData.role_id) {
-      console.log("❌ Pas de role_id");
       return [];
     }
 
     const currentRole = availableRoles.find((r) => r.id === formData.role_id);
-    console.log("🎯 Rôle trouvé:", currentRole);
 
     if (!currentRole) return [];
 
@@ -1324,7 +1317,6 @@ export default function EquipeView() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      console.log("🔄 Chargement des données team...");
       // Charger d'abord les rôles pour disposer des codes / ids fiables
       const roleMap = {};
       try {
@@ -1342,7 +1334,6 @@ export default function EquipeView() {
           });
         }
       } catch (rolesErr) {
-        console.warn("Impossible de charger les rôles:", rolesErr);
       }
 
       // Essayer d'abord d'utiliser les endpoints dédiés fournis par le backend
@@ -1390,9 +1381,6 @@ export default function EquipeView() {
         agentsFromApi.length > 0 ||
         investigFromApi.length > 0
       ) {
-        console.log(
-          "📡 Utilisation des endpoints dédiés pour la classification"
-        );
         setAdministrateurs(adminsFromApi || []);
         setAgents(agentsFromApi || []);
         setInvestigateurs(investigFromApi || []);
@@ -1422,11 +1410,8 @@ export default function EquipeView() {
             allUsers = response;
           }
         } catch (e2) {
-          console.log("Aucune méthode de récupération disponible");
         }
       }
-
-      console.log("📊 Utilisateurs trouvés:", allUsers.length);
 
       // Normaliser certains champs et construire un rôle connu par utilisateur
       const normalizedUsers = allUsers.map((u) => ({
@@ -1447,9 +1432,7 @@ export default function EquipeView() {
           departement: u.departement,
           statut: u.statut,
         }));
-        console.log("🔬 Échantillon détection rôles:", sample);
       } catch (debugErr) {
-        console.warn("Erreur debug échantillon:", debugErr);
       }
 
       // Détection robuste du rôle via role.code (si présent), puis via roleMap (récupéré), puis via role.name
@@ -1537,13 +1520,8 @@ export default function EquipeView() {
       setInvestigateurs(investigateurFiltered);
       setAdministrateurs(administrateurs);
 
-      console.log(
-        `✅ Résultat: ${agentFiltered.length} agents, ${investigateurFiltered.length} investigateurs, ${administrateurs.length} admins`
-      );
-
       setDataLoaded(true);
     } catch (error) {
-      console.error("💥 ERREUR:", error);
       setDataLoaded(true);
     } finally {
       setLoading(false);
@@ -1557,7 +1535,6 @@ export default function EquipeView() {
         setAvailableRoles(response.data);
       }
     } catch (error) {
-      console.error("Erreur chargement rôles:", error);
     }
   };
 
@@ -1578,7 +1555,6 @@ export default function EquipeView() {
   };
 
   const handleUserCreated = (newUser) => {
-    console.log("👤 Utilisateur créé - Rechargement des données...", newUser);
     // Recharger tous les utilisateurs après création
     loadAllData();
     showSuccess("Utilisateur créé avec succès");
@@ -1591,10 +1567,6 @@ export default function EquipeView() {
   };
 
   const handleUserUpdated = (updatedUser) => {
-    console.log(
-      "✏️ Utilisateur modifié - Rechargement des données...",
-      updatedUser
-    );
     // Recharger tous les utilisateurs après modification
     loadAllData();
     showSuccess("Utilisateur modifié avec succès");
@@ -1626,7 +1598,6 @@ export default function EquipeView() {
         showSuccess("Utilisateur supprimé avec succès");
       }
     } catch (error) {
-      console.error("❌ Erreur suppression:", error);
       showSuccess("Erreur lors de la suppression");
     } finally {
       setDeleteLoading(false);
@@ -1649,7 +1620,6 @@ export default function EquipeView() {
         );
       }
     } catch (error) {
-      console.error("❌ Erreur changement statut:", error);
       showSuccess("Erreur lors du changement de statut");
     }
   };
@@ -1673,7 +1643,6 @@ export default function EquipeView() {
         loadRoles();
       }
     } catch (error) {
-      console.error("❌ Erreur mise à jour permissions:", error);
       showSuccess("Erreur lors de la mise à jour des permissions");
     }
   };

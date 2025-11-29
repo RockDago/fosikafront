@@ -23,28 +23,11 @@ const DashboardAgent = ({ onDeconnexion }) => {
   useEffect(() => {
     const checkAuth = () => {
       const token = teamUtils.getAuthToken("agent");
-      console.log(
-        "🔐 Dashboard Agent - Token check:",
-        token ? "PRESENT" : "ABSENT"
-      );
-      console.log("📦 Storage state:", {
-        agent_token:
-          localStorage.getItem("agent_token") ||
-          sessionStorage.getItem("agent_token"),
-        team_token:
-          localStorage.getItem("team_token") ||
-          sessionStorage.getItem("team_token"),
-        user_type:
-          localStorage.getItem("user_type") ||
-          sessionStorage.getItem("user_type"),
-      });
 
       if (token) {
-        console.log("✅ Token found, user is authenticated");
         setIsAuthenticated(true);
         return true;
       } else {
-        console.log("❌ No token found");
         setIsAuthenticated(false);
         setIsLoading(false);
         return false;
@@ -68,7 +51,6 @@ const DashboardAgent = ({ onDeconnexion }) => {
     const checkSession = async () => {
       const token = teamUtils.getAuthToken("agent");
       if (!token) {
-        console.log("🔒 Token manquant pendant la vérification");
         handleSessionExpired();
         return;
       }
@@ -86,12 +68,10 @@ const DashboardAgent = ({ onDeconnexion }) => {
 
         if (!response.ok) {
           if (response.status === 401) {
-            console.log("🔒 Session expirée (401)");
             handleSessionExpired();
           }
         }
       } catch (error) {
-        console.error("❌ Erreur vérification session:", error);
       }
     };
 
@@ -102,14 +82,12 @@ const DashboardAgent = ({ onDeconnexion }) => {
   const fetchAgentData = async () => {
     const token = teamUtils.getAuthToken("agent");
     if (!token) {
-      console.error("❌ Dashboard Agent: No token available for fetch");
       handleSessionExpired();
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log("🔄 Dashboard Agent: Fetching agent data...");
 
       const response = await fetch("http://localhost:8000/api/agent/profile", {
         headers: {
@@ -120,29 +98,23 @@ const DashboardAgent = ({ onDeconnexion }) => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log("✅ Dashboard Agent: Agent data received:", result);
 
         if (result.success) {
           setAgentData(result.data);
           setData(result.data);
         } else {
-          console.error("❌ API returned error:", result.message);
         }
       } else if (response.status === 401) {
-        console.log("🔒 Session expirée lors du fetch");
         handleSessionExpired();
       } else {
-        console.error("❌ HTTP Error:", response.status);
       }
     } catch (error) {
-      console.error("❌ Dashboard Agent: Network error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSessionExpired = () => {
-    console.log("🚨 Session expirée - Déconnexion...");
 
     // Nettoyer le stockage
     teamUtils.logout("agent");
@@ -162,24 +134,20 @@ const DashboardAgent = ({ onDeconnexion }) => {
   };
 
   const handleAvatarUpdate = () => {
-    console.log("🔄 Avatar updated in ProfileTeam");
     setAvatarUpdated((prev) => prev + 1);
     setHeaderAvatarUpdate((prev) => prev + 1);
   };
 
   const handleHeaderAvatarUpdate = () => {
-    console.log("🔄 Avatar updated in Header");
     setHeaderAvatarUpdate((prev) => prev + 1);
     fetchAgentData();
   };
 
   const handleNavigateToProfile = () => {
-    console.log("📍 Navigation vers le profil");
     setCurrentView("profil");
   };
 
   const handleNavigateToNotifications = (params) => {
-    console.log("📍 Navigation vers les notifications:", params);
     setNotificationParams(params);
     setCurrentView("notifications");
   };

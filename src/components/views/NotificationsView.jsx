@@ -69,7 +69,6 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         }
       }
     } catch (error) {
-      console.error("Erreur chargement notifications:", error);
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +101,6 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         }
       }
     } catch (error) {
-      console.error("Erreur marquer comme lu:", error);
     }
   };
 
@@ -131,7 +129,6 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         );
       }
     } catch (error) {
-      console.error("Erreur tout marquer comme lu:", error);
     }
   };
 
@@ -161,7 +158,6 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         }
       }
     } catch (error) {
-      console.error("Erreur suppression:", error);
     }
   };
 
@@ -339,7 +335,6 @@ const NotificationsView = ({ navigationData, onCloseNotification }) => {
         return result.success ? result.data : null;
       }
     } catch (error) {
-      console.error("Erreur chargement détails signalement:", error);
     }
     return null;
   };

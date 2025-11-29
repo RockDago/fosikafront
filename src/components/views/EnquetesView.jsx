@@ -19,7 +19,9 @@ import {
   ArrowUpDown,
   AlertTriangle,
   Search,
+  Users,
 } from "lucide-react";
+import API from "../../config/axios";
 
 const EnquetesView = () => {
   const [currentTab, setCurrentTab] = useState("tous");
@@ -37,11 +39,16 @@ const EnquetesView = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedEnqueteForAction, setSelectedEnqueteForAction] =
-    useState(null);
+  const [selectedEnqueteForAction, setSelectedEnqueteForAction] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     key: "date",
     direction: "desc",
+  });
+  const [expandedSections, setExpandedSections] = useState({
+    general: true,
+    auteur: true,
+    description: true,
+    pieces: true,
   });
 
   // États pour les modals
@@ -52,7 +59,6 @@ const EnquetesView = () => {
 
   const [statusData, setStatusData] = useState({
     status: "",
-    notes: "",
   });
 
   const [reportData, setReportData] = useState({
@@ -61,19 +67,149 @@ const EnquetesView = () => {
     dateFin: new Date().toISOString().split("T")[0],
   });
 
-  // Données d'exemple
-  const categories = [
-    "Fraude financière",
-    "Faux diplômes",
-    "Recrutement irrégulier",
-    "Harcèlement",
-    "Corruption",
-    "Divers",
-  ];
+  // Charger les données réelles depuis l'API
+  useEffect(() => {
+    fetchAssignedReports();
+  }, []);
 
-  const statuts = ["Assigné", "En cours", "Complété", "Transmis"];
+  const fetchAssignedReports = async () => {
+    setIsLoading(true);
+    try {
+      console.log("🔄 Chargement des dossiers assignés...");
 
-  const demandeurs = ["Service Client", "DRH", "Direction Générale", "Autre"];
+      // Essayer d'abord l'endpoint assigné
+      try {
+        const response = await API.get("/reports/assigned");
+        console.log("✅ Dossiers assignés chargés:", response.data);
+
+        if (response.data.success) {
+          processApiResponse(response.data);
+          return;
+        }
+      } catch (assignError) {
+        console.log(
+          "❌ Endpoint /assigned non disponible, tentative avec /reports"
+        );
+      }
+
+      // Récupérer tous les rapports
+      try {
+        const response = await API.get("/reports");
+        console.log("✅ Tous les rapports chargés:", response.data);
+
+        if (response.data.success) {
+          const allReports = response.data.data || [];
+          
+          // Pour le moment, on prend tous les rapports comme assignés
+          const assignedReports = allReports;
+
+          processApiResponse({
+            success: true,
+            data: assignedReports,
+            stats: {
+              dossiersAssignes: assignedReports.length,
+              soumisBianco: assignedReports.filter((r) => r.status === "finalise").length,
+              enquetesCompletees: assignedReports.filter((r) => r.status === "classifier").length,
+              totalDossiers: assignedReports.length,
+            }
+          });
+          return;
+        }
+      } catch (reportsError) {
+        console.error("❌ Erreur avec l'endpoint /reports:", reportsError);
+      }
+
+      // Si les deux endpoints échouent
+      throw new Error("Impossible de charger les données depuis l'API");
+    } catch (error) {
+      console.error("❌ Erreur finale:", error);
+      setEnquetes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fonction pour traiter la réponse API
+  const processApiResponse = (apiData) => {
+    if (apiData.success) {
+      const reports = apiData.data || [];
+      
+      // Formater les données pour correspondre à la structure attendue
+      const formattedEnquetes = reports.map((report) => ({
+        id: report.id,
+        reference: report.reference || `REF-${report.id}`,
+        date: new Date(report.created_at || report.date).toLocaleDateString("fr-FR"),
+        nom_prenom: report.name || report.demandeur || "Anonyme",
+        categorie: getCategoryName(report.category),
+        demandeur: getAssignedUserRole(report.assigned_to), // Afficher le rôle de la personne qui a assigné
+        statut: getStatusLabel(report.status),
+        province: report.province || "Non spécifié",
+        region: report.region || "Non spécifié",
+        rawData: report, // Conserver les données brutes pour référence
+        email: report.email || "N/A",
+        telephone: report.phone || "N/A",
+        explication: report.description || "Aucune description",
+        files: report.files || [],
+        type_signalement: report.is_anonymous ? "Anonyme" : "Non-Anonyme",
+        assigned_to: report.assigned_to || "Non assigné"
+      }));
+
+      setEnquetes(formattedEnquetes);
+    }
+  };
+
+  // Fonction pour obtenir le nom de la catégorie
+  const getCategoryName = (category) => {
+    const names = {
+      "faux-diplomes": "Faux Diplômes",
+      "offre-formation-irreguliere": "Offre de formation irrégulière (non habilité)",
+      "Offre de formation irrégulière ( non habilité)": "Offre de formation irrégulière (non habilité)",
+      "recrutements-irreguliers": "Recrutements Irréguliers",
+      harcelement: "Harcèlement",
+      corruption: "Corruption",
+      divers: "Divers",
+    };
+    return names[category] || category;
+  };
+
+  // Fonction pour obtenir le rôle de l'utilisateur assigné
+  const getAssignedUserRole = (assignedTo) => {
+    if (!assignedTo) return "Non assigné";
+    
+    const roles = {
+      1: "Administrateur",
+      2: "Investigateur",
+      3: "Agent",
+      4: "Superviseur"
+    };
+    
+    return roles[assignedTo] || `Utilisateur ${assignedTo}`;
+  };
+
+  // Fonction pour obtenir le label du statut
+  const getStatusLabel = (status) => {
+    const labels = {
+      en_cours: "En cours",
+      finalise: "Soumis BIANCO",
+      classifier: "Complété",
+      doublon: "Doublon",
+      refuse: "Refusé",
+      traitement_classification: "Traitement et Classification",
+      investigation: "Investigation",
+      transmis_autorite: "Transmis aux autorités compétentes",
+    };
+    return labels[status] || status;
+  };
+
+  // Fonction pour obtenir l'affichage de l'assignation
+  const getDisplayAssignedTo = (assignedTo) => {
+    const assignMap = {
+      investigateur: "Investigateur",
+      cac_daj: "DAAQ / CAC / DAJ",
+      autorite_competente: "Autorité compétente",
+    };
+    return assignMap[assignedTo] || assignedTo || "Non assigné";
+  };
 
   // Structure des provinces et régions de Madagascar
   const madagascarRegions = useMemo(
@@ -113,59 +249,6 @@ const EnquetesView = () => {
     []
   );
 
-  // Charger les données d'exemple
-  useEffect(() => {
-    const mockData = [
-      {
-        id: 1,
-        reference: "ENQ-20240115-ABC123",
-        date: "2024-01-15",
-        nom_prenom: "Dupont Jean",
-        categorie: "Fraude financière",
-        demandeur: "DAAQ",
-        statut: "Assigné",
-        province: "Antananarivo",
-        region: "Analamanga",
-      },
-      {
-        id: 2,
-        reference: "ENQ-20240116-DEF456",
-        date: "2024-01-16",
-        nom_prenom: "Martin Sophie",
-        categorie: "Faux diplômes",
-        demandeur: "DEGS",
-        statut: "En cours",
-        province: "Fianarantsoa",
-        region: "Haute Matsiatra",
-      },
-      {
-        id: 3,
-        reference: "ENQ-20240117-GHI789",
-        date: "2024-01-17",
-        nom_prenom: "Leroy Pierre",
-        categorie: "Recrutement irrégulier",
-        demandeur: "DAAQ",
-        statut: "Complété",
-        province: "Toamasina",
-        region: "Atsinanana",
-      },
-      {
-        id: 4,
-        reference: "ENQ-20240118-JKL012",
-        date: "2024-01-18",
-        nom_prenom: "Rakoto Jean",
-        categorie: "Corruption",
-        demandeur: "DEGS",
-        statut: "Transmis",
-        province: "Antsiranana",
-        region: "Diana",
-      },
-    ];
-
-    setEnquetes(mockData);
-    setIsLoading(false);
-  }, []);
-
   // Régions disponibles basées sur la province sélectionnée
   const availableRegions = useMemo(() => {
     if (!filters.province) {
@@ -198,8 +281,8 @@ const EnquetesView = () => {
       let bValue = b[sortConfig.key];
 
       if (sortConfig.key === "date") {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
+        aValue = new Date(a.rawData?.created_at || aValue);
+        bValue = new Date(b.rawData?.created_at || bValue);
       }
 
       if (sortConfig.key === "reference") {
@@ -359,23 +442,19 @@ const EnquetesView = () => {
 
   // Fonctions de gestion des actions
   const handleViewEnquete = (enquete) => {
-    setSelectedEnquete(enquete);
-  };
-
-  const handleAssignEnquete = (enquete) => {
-    setSelectedEnqueteForAction(enquete);
-    setAssignData({
-      assignTo: "",
-      reason: "",
+    setSelectedEnquete(selectedEnquete?.id === enquete.id ? null : enquete);
+    setExpandedSections({
+      general: true,
+      auteur: true,
+      description: true,
+      pieces: true,
     });
-    setShowAssignModal(true);
   };
 
   const handleStatusUpdate = (enquete) => {
     setSelectedEnqueteForAction(enquete);
     setStatusData({
-      status: enquete.statut || "",
-      notes: "",
+      status: enquete.rawData?.status || "",
     });
     setShowStatusModal(true);
   };
@@ -396,13 +475,6 @@ const EnquetesView = () => {
   };
 
   // Soumission des formulaires
-  const handleAssignSubmit = (e) => {
-    e.preventDefault();
-    console.log("Assigner:", selectedEnqueteForAction.id, assignData);
-    // TODO: Appel API pour assigner
-    setShowAssignModal(false);
-  };
-
   const handleStatusSubmit = (e) => {
     e.preventDefault();
     console.log(
@@ -429,7 +501,6 @@ const EnquetesView = () => {
         "DATE",
         "Nom/Prénom",
         "Catégorie",
-        "Demandeur",
         "Statut",
         "Province",
         "Région",
@@ -439,7 +510,6 @@ const EnquetesView = () => {
         enquete.date,
         enquete.nom_prenom,
         enquete.categorie,
-        enquete.demandeur,
         enquete.statut,
         enquete.province,
         enquete.region,
@@ -457,7 +527,7 @@ const EnquetesView = () => {
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `enquetes_${new Date().toISOString().split("T")[0]}.csv`
+      `dossiers_assignes_${new Date().toISOString().split("T")[0]}.csv`
     );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
@@ -465,147 +535,521 @@ const EnquetesView = () => {
     document.body.removeChild(link);
   };
 
+  // Fonctions pour les fichiers
+  const handleDownloadFile = async (fileName) => {
+    try {
+      const encodedFileName = encodeURIComponent(fileName);
+      const response = await API.get(`/files/${encodedFileName}/download`, {
+        responseType: "blob",
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert("Erreur lors du téléchargement du fichier");
+    }
+  };
+
+  const handleViewFile = (fileName) => {
+    const encodedFileName = encodeURIComponent(fileName);
+    const fileUrl = `${API.defaults.baseURL}/files/${encodedFileName}`;
+    window.open(fileUrl, "_blank");
+  };
+
+  // Toggle sections
+  const toggleSection = (section) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
   // Statistiques par onglet
   const getTabStats = () => {
     return {
       tous: allEnquetes.length,
-      assigné: allEnquetes.filter((e) => e.statut === "Assigné").length,
       "en cours": allEnquetes.filter((e) => e.statut === "En cours").length,
+      "soumis bianco": allEnquetes.filter((e) => e.statut === "Soumis BIANCO").length,
       complété: allEnquetes.filter((e) => e.statut === "Complété").length,
-      transmis: allEnquetes.filter((e) => e.statut === "Transmis").length,
     };
   };
 
   const tabStats = getTabStats();
 
-  // Si une enquête est sélectionnée, afficher la page de détail
+  // Si une enquête est sélectionnée, afficher la page de détail avec toggle
   if (selectedEnquete) {
     return (
-      <div className="p-4 bg-white min-h-screen">
-        {/* Header de la page de détail */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              Détail de l'Enquête - {selectedEnquete.reference}
-            </h1>
-            <p className="text-gray-600 text-sm mt-1">
-              {selectedEnquete.date} • {selectedEnquete.categorie}
-            </p>
+      <>
+        <div className="p-4 bg-white min-h-screen">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">
+                Détail du Dossier - {selectedEnquete.reference}
+              </h1>
+              <p className="text-xs text-gray-600 mt-1">
+                {selectedEnquete.date} • {selectedEnquete.categorie}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedEnquete(null)}
+              className="flex items-center gap-2 px-3 py-2 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <ChevronLeft className="w-3 h-3" />
+              Retour à la liste
+            </button>
           </div>
-          <button
-            onClick={() => setSelectedEnquete(null)}
-            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Retour à la liste
-          </button>
+
+          <div className="space-y-3">
+            {/* Informations Générales avec toggle */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <button
+                onClick={() => toggleSection("general")}
+                className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h4 className="text-sm font-semibold text-gray-900">
+                    Informations Générales
+                  </h4>
+                </div>
+                {expandedSections.general ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                )}
+              </button>
+              {expandedSections.general && (
+                <div className="px-3 pb-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span className="text-gray-600 block mb-1">
+                        Référence:
+                      </span>
+                      <p className="font-medium text-sm">
+                        {selectedEnquete.reference}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 block mb-1">Date:</span>
+                      <p className="font-medium text-sm">{selectedEnquete.date}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 block mb-1">
+                        Catégorie:
+                      </span>
+                      <p className="font-medium text-sm">
+                        {selectedEnquete.categorie}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 block mb-1">
+                        Province:
+                      </span>
+                      <p className="font-medium text-sm">
+                        {selectedEnquete.province}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 block mb-1">Région:</span>
+                      <p className="font-medium text-sm">{selectedEnquete.region}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 block mb-1">Statut:</span>
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          selectedEnquete.statut === "En cours"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : selectedEnquete.statut === "Soumis BIANCO"
+                            ? "bg-blue-100 text-blue-800"
+                            : selectedEnquete.statut === "Complété"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {selectedEnquete.statut}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 block mb-1">
+                        Assigné à:
+                      </span>
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          selectedEnquete.assigned_to === "investigateur"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : selectedEnquete.assigned_to === "cac_daj"
+                            ? "bg-blue-100 text-blue-800"
+                            : selectedEnquete.assigned_to === "autorite_competente"
+                            ? "bg-cyan-100 text-cyan-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {getDisplayAssignedTo(selectedEnquete.assigned_to)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Informations de l'Auteur avec toggle */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <button
+                onClick={() => toggleSection("auteur")}
+                className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                  <h4 className="text-sm font-semibold text-gray-900">
+                    Informations de l'Auteur
+                  </h4>
+                </div>
+                {expandedSections.auteur ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                )}
+              </button>
+              {expandedSections.auteur && (
+                <div className="px-3 pb-3">
+                  {selectedEnquete.type_signalement === "Anonyme" ? (
+                    <div className="text-center py-3">
+                      <Users className="w-6 h-6 text-gray-400 mx-auto mb-1" />
+                      <p className="text-xs text-gray-600">
+                        Signalement anonyme
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <span className="text-gray-600 block mb-1">
+                          Nom / Prénom:
+                        </span>
+                        <p className="font-medium text-sm">
+                          {selectedEnquete.nom_prenom}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-gray-600 block mb-1">Email:</span>
+                        <p className="font-medium text-sm">
+                          {selectedEnquete.email}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-gray-600 block mb-1">
+                          Téléphone:
+                        </span>
+                        <p className="font-medium text-sm">
+                          {selectedEnquete.telephone}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Description du Signalement avec toggle */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <button
+                onClick={() => toggleSection("description")}
+                className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <h4 className="text-sm font-semibold text-gray-900">
+                    Description du Signalement
+                  </h4>
+                </div>
+                {expandedSections.description ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                )}
+              </button>
+              {expandedSections.description && (
+                <div className="px-3 pb-3">
+                  <div className="bg-gray-50 rounded-md p-3 text-xs leading-relaxed">
+                    {selectedEnquete.explication}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pièces Jointes avec toggle */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <button
+                onClick={() => toggleSection("pieces")}
+                className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <h4 className="text-sm font-semibold text-gray-900">
+                    Pièces Jointes
+                  </h4>
+                </div>
+                {expandedSections.pieces ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                )}
+              </button>
+              {expandedSections.pieces && (
+                <div className="px-3 pb-3">
+                  {selectedEnquete.files && selectedEnquete.files.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {selectedEnquete.files.map((file, idx) => {
+                        const fileName = typeof file === "string" ? file : file.name || "";
+                        const ext = fileName.split(".").pop()?.toLowerCase();
+                        const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
+                        const isPdf = ext === "pdf";
+
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-gray-50 rounded-lg border overflow-hidden"
+                          >
+                            <div className="aspect-video bg-white flex items-center justify-center">
+                              {isImage ? (
+                                <img
+                                  src={`${API.defaults.baseURL}/files/${encodeURIComponent(fileName)}`}
+                                  alt={fileName}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src =
+                                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120'%3E%3Crect width='100%25' height='100%25' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%239ca3af' font-size='12'%3EImpossible de charger l'image%3C/text%3E%3C/svg%3E";
+                                  }}
+                                />
+                              ) : isPdf ? (
+                                <div className="text-center p-2">
+                                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+                                    <span className="text-red-600 font-bold text-xs">
+                                      PDF
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-600">
+                                    Document PDF
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="text-center p-2">
+                                  <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-1">
+                                    <span className="text-gray-600 font-bold text-xs">
+                                      {ext?.toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-600">
+                                    Fichier {ext}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-2">
+                              <p
+                                className="text-xs font-medium truncate mb-1"
+                                title={fileName}
+                              >
+                                {fileName}
+                              </p>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleViewFile(fileName)}
+                                  className="flex-1 bg-blue-50 text-blue-600 py-1 px-1 rounded text-xs hover:bg-blue-100 transition-colors"
+                                >
+                                  Voir
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadFile(fileName)}
+                                  className="flex-1 bg-gray-100 text-gray-700 py-1 px-1 rounded text-xs hover:bg-gray-200 transition-colors"
+                                >
+                                  Télécharger
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Download className="w-6 h-6 text-gray-400" />
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Aucun fichier joint
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end items-center mt-6 pt-4 border-t">
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleStatusUpdate(selectedEnquete)}
+                className="flex items-center gap-1 px-3 py-1 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+              >
+                <Filter className="w-3 h-3" />
+                Statut
+              </button>
+              <button
+                onClick={() => handleDeleteEnquete(selectedEnquete)}
+                className="flex items-center gap-1 px-3 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+                Supprimer
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Contenu détaillé de l'enquête */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Informations principales */}
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-md font-semibold text-gray-900 mb-3">
-                Informations Générales
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Référence:</span>
-                  <span className="font-medium">
-                    {selectedEnquete.reference}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Date:</span>
-                  <span className="font-medium">{selectedEnquete.date}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Catégorie:</span>
-                  <span className="font-medium">
-                    {selectedEnquete.categorie}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Demandeur:</span>
-                  <span className="font-medium">
-                    {selectedEnquete.demandeur}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Province:</span>
-                  <span className="font-medium">
-                    {selectedEnquete.province}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Région:</span>
-                  <span className="font-medium">{selectedEnquete.region}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Statut:</span>
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      selectedEnquete.statut === "Assigné"
-                        ? "bg-blue-100 text-blue-800"
-                        : selectedEnquete.statut === "En cours"
-                        ? "bg-yellow-100 text-yellow-800"
-                        : selectedEnquete.statut === "Complété"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-purple-100 text-purple-800"
-                    }`}
+        {/* Modal Statut mis à jour */}
+        {showStatusModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-lg w-full max-w-md mx-4">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">Mettre à jour le statut</h2>
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleStatusSubmit} className="p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nouveau statut <span className="text-red-600">*</span>
+                  </label>
+                  <select
+                    value={statusData.status}
+                    onChange={(e) =>
+                      setStatusData((prev) => ({
+                        ...prev,
+                        status: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
                   >
-                    {selectedEnquete.statut}
+                    <option value="">Sélectionner un statut</option>
+                    <option value="investigation">Investigation</option>
+                    <option value="transmis_autorite">
+                      Transmis aux autorités compétentes
+                    </option>
+                    <option value="refuse">Refusé</option>
+                    <option value="classifier">Classifié</option>
+                    <option value="en_cours">En cours</option>
+                    <option value="finalise">Finalisé</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowStatusModal(false)}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700"
+                  >
+                    Mettre à jour le statut
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Suppression */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 rounded-t-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-full">
+                    <AlertTriangle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">
+                      Confirmer la suppression
+                    </h2>
+                    <p className="text-red-100 text-sm">Action irréversible</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="flex items-center gap-4 mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-red-800 text-sm">
+                      Dossier à supprimer
+                    </h3>
+                    <p className="text-red-600 text-xs">
+                      {selectedEnqueteForAction?.reference} -{" "}
+                      {selectedEnqueteForAction?.nom_prenom}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-amber-800 text-sm mb-1">
+                        Attention
+                      </h4>
+                      <p className="text-amber-700 text-xs leading-relaxed">
+                        Cette action est définitive et ne peut pas être annulée.
+                        Toutes les données associées à ce dossier seront
+                        définitivement supprimées du système.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  <CheckCircle className="w-4 h-4 text-gray-400" />
+                  <span>
+                    Veuillez confirmer votre intention de supprimer ce dossier
                   </span>
                 </div>
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-md font-semibold text-gray-900 mb-3">
-                Actions
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
                 <button
-                  onClick={() => handleAssignEnquete(selectedEnquete)}
-                  className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                 >
-                  <UserCheck className="w-4 h-4" />
-                  Assigner
+                  Annuler
                 </button>
                 <button
-                  onClick={() => handleStatusUpdate(selectedEnquete)}
-                  className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-                >
-                  <Filter className="w-4 h-4" />
-                  Statut
-                </button>
-                <button
-                  onClick={() => handleDeleteEnquete(selectedEnquete)}
-                  className="flex items-center justify-center gap-2 px-3 py-2 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors col-span-2"
+                  onClick={confirmDeleteEnquete}
+                  className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Supprimer
+                  Supprimer définitivement
                 </button>
               </div>
             </div>
           </div>
-
-          {/* Documents et historique */}
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-md font-semibold text-gray-900 mb-3">
-                Documents Associés
-              </h3>
-              <div className="text-center py-6 text-gray-500 text-sm">
-                <FileText className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p>Aucun document associé pour le moment</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
+      </>
     );
   }
 
@@ -637,7 +1081,7 @@ const EnquetesView = () => {
             className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <FileText className="w-4 h-4" />
-            Générer Rapport
+            Générer rapport
           </button>
         </div>
       </div>
@@ -660,20 +1104,6 @@ const EnquetesView = () => {
 
         <button
           className={
-            currentTab === "assigné"
-              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
-              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }
-          onClick={() => {
-            setCurrentTab("assigné");
-            setCurrentPage(1);
-          }}
-        >
-          Assigné ({tabStats.assigné})
-        </button>
-
-        <button
-          className={
             currentTab === "en cours"
               ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
               : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -684,6 +1114,20 @@ const EnquetesView = () => {
           }}
         >
           En cours ({tabStats["en cours"]})
+        </button>
+
+        <button
+          className={
+            currentTab === "soumis bianco"
+              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }
+          onClick={() => {
+            setCurrentTab("soumis bianco");
+            setCurrentPage(1);
+          }}
+        >
+          Soumis BIANCO ({tabStats["soumis bianco"]})
         </button>
 
         <button
@@ -699,20 +1143,6 @@ const EnquetesView = () => {
         >
           Complété ({tabStats.complété})
         </button>
-
-        <button
-          className={
-            currentTab === "transmis"
-              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
-              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }
-          onClick={() => {
-            setCurrentTab("transmis");
-            setCurrentPage(1);
-          }}
-        >
-          Transmis ({tabStats.transmis})
-        </button>
       </div>
 
       {/* Filtres */}
@@ -724,7 +1154,7 @@ const EnquetesView = () => {
               type="text"
               value={filters.search}
               onChange={(e) => handleFilterChange("search", e.target.value)}
-              placeholder="Rechercher par référence ou type..."
+              placeholder="Rechercher par référence, nom ou catégorie..."
               className="w-full pl-7 pr-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -771,7 +1201,7 @@ const EnquetesView = () => {
           Réinitialiser les filtres
         </button>
         <div className="text-gray-500 text-xs">
-          {filteredEnquetes.length} enquêtes trouvées
+          {filteredEnquetes.length} dossiers trouvés
         </div>
       </div>
 
@@ -780,11 +1210,12 @@ const EnquetesView = () => {
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="p-4 text-center text-gray-500 text-sm">
-              Chargement en cours...
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              Chargement des dossiers assignés...
             </div>
           ) : filteredEnquetes.length === 0 ? (
             <div className="p-4 text-center text-gray-500 text-sm">
-              Aucune enquête trouvée avec les filtres actuels
+              Aucun dossier assigné trouvé avec les filtres actuels
             </div>
           ) : (
             <table className="min-w-full text-sm">
@@ -815,9 +1246,6 @@ const EnquetesView = () => {
                     Catégorie
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Demandeur
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Statut
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -843,19 +1271,16 @@ const EnquetesView = () => {
                     <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
                       {enquete.categorie}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
-                      {enquete.demandeur}
-                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          enquete.statut === "Assigné"
-                            ? "bg-blue-100 text-blue-800"
-                            : enquete.statut === "En cours"
+                          enquete.statut === "En cours"
                             ? "bg-yellow-100 text-yellow-800"
+                            : enquete.statut === "Soumis BIANCO"
+                            ? "bg-blue-100 text-blue-800"
                             : enquete.statut === "Complété"
                             ? "bg-green-100 text-green-800"
-                            : "bg-purple-100 text-purple-800"
+                            : "bg-gray-100 text-gray-800"
                         }`}
                       >
                         {enquete.statut}
@@ -869,13 +1294,6 @@ const EnquetesView = () => {
                           title="Voir détails"
                         >
                           <Eye className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => handleAssignEnquete(enquete)}
-                          className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
-                          title="Assigner"
-                        >
-                          <UserCheck className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => handleStatusUpdate(enquete)}
@@ -971,84 +1389,9 @@ const EnquetesView = () => {
         )}
       </div>
 
-      {/* Modal Assigner */}
-      {showAssignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg w-full max-w-md mx-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Assigner l'enquête</h2>
-              <button
-                onClick={() => setShowAssignModal(false)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAssignSubmit} className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigner à *
-                </label>
-                <select
-                  value={assignData.assignTo}
-                  onChange={(e) =>
-                    setAssignData((prev) => ({
-                      ...prev,
-                      assignTo: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                >
-                  <option value="">Sélectionner un destinataire</option>
-                  <option value="investigateur1">Investigateur 1</option>
-                  <option value="investigateur2">Investigateur 2</option>
-                  <option value="comite">Comité d'enquête</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Raison de l'assignation
-                </label>
-                <textarea
-                  value={assignData.reason}
-                  onChange={(e) =>
-                    setAssignData((prev) => ({
-                      ...prev,
-                      reason: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Raison optionnelle..."
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowAssignModal(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  Assigner
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Statut */}
+      {/* Modal Statut mis à jour */}
       {showStatusModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md mx-4">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">Mettre à jour le statut</h2>
@@ -1063,7 +1406,7 @@ const EnquetesView = () => {
             <form onSubmit={handleStatusSubmit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nouveau statut *
+                  Nouveau statut <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={statusData.status}
@@ -1077,30 +1420,15 @@ const EnquetesView = () => {
                   required
                 >
                   <option value="">Sélectionner un statut</option>
-                  {statuts.map((statut) => (
-                    <option key={statut} value={statut}>
-                      {statut}
-                    </option>
-                  ))}
+                  <option value="investigation">Investigation</option>
+                  <option value="transmis_autorite">
+                    Transmis aux autorités compétentes
+                  </option>
+                  <option value="refuse">Refusé</option>
+                  <option value="classifier">Classifié</option>
+                  <option value="en_cours">En cours</option>
+                  <option value="finalise">Finalisé</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={statusData.notes}
-                  onChange={(e) =>
-                    setStatusData((prev) => ({
-                      ...prev,
-                      notes: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Notes supplémentaires..."
-                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
@@ -1115,7 +1443,7 @@ const EnquetesView = () => {
                   type="submit"
                   className="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700"
                 >
-                  Mettre à jour
+                  Mettre à jour le statut
                 </button>
               </div>
             </form>
@@ -1127,7 +1455,6 @@ const EnquetesView = () => {
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
-            {/* Header avec icône d'alerte */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 rounded-t-xl">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-full">
@@ -1142,7 +1469,6 @@ const EnquetesView = () => {
               </div>
             </div>
 
-            {/* Contenu */}
             <div className="p-6">
               <div className="flex items-center gap-4 mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
                 <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1150,7 +1476,7 @@ const EnquetesView = () => {
                 </div>
                 <div>
                   <h3 className="font-semibold text-red-800 text-sm">
-                    Enquête à supprimer
+                    Dossier à supprimer
                   </h3>
                   <p className="text-red-600 text-xs">
                     {selectedEnqueteForAction?.reference} -{" "}
@@ -1168,7 +1494,7 @@ const EnquetesView = () => {
                     </h4>
                     <p className="text-amber-700 text-xs leading-relaxed">
                       Cette action est définitive et ne peut pas être annulée.
-                      Toutes les données associées à cette enquête seront
+                      Toutes les données associées à ce dossier seront
                       définitivement supprimées du système.
                     </p>
                   </div>
@@ -1178,12 +1504,11 @@ const EnquetesView = () => {
               <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
                 <CheckCircle className="w-4 h-4 text-gray-400" />
                 <span>
-                  Veuillez confirmer votre intention de supprimer cette enquête
+                  Veuillez confirmer votre intention de supprimer ce dossier
                 </span>
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
               <button
                 onClick={() => setShowDeleteModal(false)}
@@ -1203,12 +1528,12 @@ const EnquetesView = () => {
         </div>
       )}
 
-      {/* Modal Générer Rapport */}
+      {/* Modal Générer rapport */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md mx-4">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Générer un Rapport</h2>
+              <h2 className="text-lg font-semibold">Générer un rapport</h2>
               <button
                 onClick={() => setShowReportModal(false)}
                 className="p-1 hover:bg-gray-100 rounded"
@@ -1286,7 +1611,7 @@ const EnquetesView = () => {
                   type="submit"
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
-                  Générer Rapport
+                  Générer rapport
                 </button>
               </div>
             </form>

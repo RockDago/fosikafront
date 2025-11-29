@@ -8,27 +8,30 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle,
-  Clock,
   Plus,
   Edit,
   UserCheck,
   Filter,
   Users,
   Archive,
-  Send,
   ChevronDown,
   ChevronUp,
   FileText,
   ArrowUpDown,
   AlertTriangle,
 } from "lucide-react";
+import API from "../../config/axios";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+import repLogo from "../../assets/images/logo rep.png";
+import mesupresLogo from "../../assets/images/logo mesupres.png";
+import fosikaLogo from "../../assets/images/logo fosika.png";
 
 const ReportsView = () => {
   const [currentTab, setCurrentTab] = useState("tous");
   const [filters, setFilters] = useState({
     search: "",
-    region: "",
-    province: "",
     statut: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,9 +45,9 @@ const ReportsView = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showClassifyModal, setShowClassifyModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // Nouveau modal de suppression
+  const [showReportPreview, setShowReportPreview] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedReportForAction, setSelectedReportForAction] = useState(null);
   const [expandedSections, setExpandedSections] = useState({
     general: true,
@@ -54,25 +57,25 @@ const ReportsView = () => {
   });
   const [sortConfig, setSortConfig] = useState({
     key: "date",
-    direction: "desc", // 'asc' pour ancien -> récent, 'desc' pour récent -> ancien
+    direction: "desc",
   });
 
-  // États pour les modals
   const [newReport, setNewReport] = useState({
     category: "",
     description: "",
     files: [],
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    type: "identifie",
   });
+
   const [assignData, setAssignData] = useState({
-    assignTo: "cac_dagi",
-    reason: "",
+    assignTo: "investigateur",
   });
   const [statusData, setStatusData] = useState({
     status: "",
-    notes: "",
-  });
-  const [classifyData, setClassifyData] = useState({
-    reason: "",
   });
   const [editData, setEditData] = useState({});
   const [reportData, setReportData] = useState({
@@ -80,9 +83,10 @@ const ReportsView = () => {
     dateDebut: new Date().toISOString().split("T")[0],
     dateFin: new Date().toISOString().split("T")[0],
     categories: [],
+    notes: "",
   });
+  const [generatedReport, setGeneratedReport] = useState(null);
 
-  // Catégories pour l'analyse
   const categories = [
     {
       id: "faux-diplomes",
@@ -116,183 +120,77 @@ const ReportsView = () => {
     },
   ];
 
-  // Options pour l'assignation
-  const assignToOptions = [{ value: "cac_dagi", label: "CAC / DAGI" }];
-
-  // Options pour le statut
-  const statusOptions = [
-    { value: "cac_dagi", label: "CAC / DAGI" },
-    { value: "transmis_autorite", label: "Transmet à l'autorité compétente" },
+  const assignToOptions = [
+    { value: "investigateur", label: "Investigateur" },
+    { value: "cac_daj", label: "DAAQ / CAC / DAJ" },
+    { value: "autorite_competente", label: "Autorité compétente" },
   ];
 
-  // Structure des provinces et régions de Madagascar
-  const madagascarRegions = useMemo(
-    () => [
-      {
-        province: "Antananarivo",
-        regions: ["Analamanga", "Bongolava", "Itasy", "Vakinankaratra"],
-      },
-      {
-        province: "Antsiranana",
-        regions: ["Diana", "Sava"],
-      },
-      {
-        province: "Fianarantsoa",
-        regions: [
-          "Amoron'i Mania",
-          "Atsimo-Atsinanana",
-          "Fitovinany",
-          "Haute Matsiatra",
-          "Ihorombe",
-          "Vatovavy",
-        ],
-      },
-      {
-        province: "Mahajanga",
-        regions: ["Betsiboka", "Boeny", "Melaky", "Sofia"],
-      },
-      {
-        province: "Toamasina",
-        regions: ["Alaotra Mangoro", "Analanjirofo", "Atsinanana"],
-      },
-      {
-        province: "Toliara",
-        regions: ["Androy", "Anosy", "Atsimo-Andrefana", "Menabe"],
-      },
-    ],
-    []
-  );
+  const fetchReports = async () => {
+    setIsLoading(true);
+    setError(null);
 
-  // Générer une référence unique
-  const generateReference = () => {
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-    const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-    return `REF-${dateStr}-${randomStr}`;
-  };
+    try {
+      const response = await API.get("/reports?per_page=1000");
+      const result = response.data;
 
-  // Fonction pour déterminer la province depuis la région
-  const getProvinceFromRegion = (region) => {
-    if (!region) return "Non spécifié";
-    for (const prov of madagascarRegions) {
-      if (prov.regions.includes(region)) {
-        return prov.province;
-      }
-    }
-    return "Non spécifié";
-  };
-
-  // Mapping des catégories API vers les catégories affichées
-  const categoryMapping = {
-    "faux-diplomes": "📜 Faux Diplômes",
-    "offre-formation-irreguliere":
-      "🎓 Offre de formation irrégulière (non habilité)",
-    "recrutements-irreguliers": "💼 Recrutements Irréguliers",
-    harcelement: "⚠️ Harcèlement",
-    corruption: "🔴 Corruption",
-    divers: "🏷️ Divers",
-  };
-
-  // Récupérer les données depuis l'API
-  useEffect(() => {
-    const fetchReports = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          "http://localhost:8000/api/reports?per_page=1000",
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-
-        const result = await response.json();
-        let reportsData = [];
-
-        if (result.success && result.data && result.data.reports) {
-          reportsData = result.data.reports;
-        } else if (result.success && Array.isArray(result.data)) {
-          reportsData = result.data;
-        } else if (Array.isArray(result)) {
-          reportsData = result;
-        } else {
-          console.warn("⚠️ Structure de données non reconnue:", result);
-          reportsData = [];
-        }
-
-        if (reportsData && reportsData.length > 0) {
-          const mappedReports = reportsData.map((report) => {
-            // Parser files
-            let filesArray = [];
-            try {
-              if (report.files) {
-                if (typeof report.files === "string") {
-                  filesArray = JSON.parse(report.files);
-                } else if (Array.isArray(report.files)) {
-                  filesArray = report.files;
-                }
+      if (result.success && Array.isArray(result.data)) {
+        const mappedReports = result.data.map((report) => {
+          let filesArray = [];
+          try {
+            if (report.files) {
+              if (typeof report.files === "string") {
+                filesArray = JSON.parse(report.files);
+              } else if (Array.isArray(report.files)) {
+                filesArray = report.files;
               }
-            } catch (e) {
-              console.warn("Erreur parsing files:", e);
             }
+          } catch (e) {}
 
-            return {
-              id: report.reference || `REF-${report.id}`,
-              date: report.created_at || report.date,
-              nom_prenom:
-                report.is_anonymous || report.type === "anonyme"
-                  ? "Anonyme"
-                  : report.name || "Non spécifié",
-              telephone: report.phone || "N/A",
-              email: report.email || "N/A",
-              categorie: report.category,
-              categorieLabel:
-                categoryMapping[report.category] || report.category,
-              region: report.region || "Non spécifié",
-              province: getProvinceFromRegion(report.region),
-              raison: report.title || "Non spécifié",
-              type_signalement:
-                report.is_anonymous || report.type === "anonyme"
-                  ? "Anonyme"
-                  : "Non-Anonyme",
-              explication: report.description || "Aucune description",
-              files: filesArray,
-              status: report.status || "daaq_drse",
-              assigned_to: report.assigned_to || "Non assigné",
-              city: report.city,
-            };
-          });
+          return {
+            id: report.id,
+            reference: report.reference,
+            date: report.created_at,
+            nom_prenom: report.is_anonymous
+              ? "Anonyme"
+              : report.name || "Non spécifié",
+            telephone: report.phone || "N/A",
+            email: report.email || "N/A",
+            categorie: report.category,
+            categorieLabel: report.category,
+            raison: report.title || "Non spécifié",
+            type_signalement: report.is_anonymous ? "Anonyme" : "Non-Anonyme",
+            explication: report.description || "Aucune description",
+            files: filesArray,
+            status: report.status || "traitement_classification",
+            assigned_to: report.assigned_to || "Non assigné",
+            city: report.city,
+            province: report.province,
+            region: report.region,
+            has_proof: report.has_proof || false,
+          };
+        });
 
-          setReports(mappedReports);
-        } else {
-          setReports([]);
-        }
-      } catch (error) {
-        console.error("💥 Erreur lors du chargement des données:", error);
-        setError(error.message);
-      } finally {
-        setIsLoading(false);
+        setReports(mappedReports);
+      } else {
+        setReports([]);
       }
-    };
+    } catch (error) {
+      setError(error.response?.data?.message || error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchReports();
-  }, [madagascarRegions]);
+  }, []);
 
-  // Calcul des statistiques par catégorie
   const calculateCategoryStats = (categoryId) => {
     if (categoryId === "tous") {
       const total = reports.length;
       const encours = reports.filter(
-        (report) => report.status === "daaq_drse"
+        (report) => report.status === "en_cours"
       ).length;
       const resolus = reports.filter(
         (report) => report.status === "finalise"
@@ -305,7 +203,7 @@ const ReportsView = () => {
     );
     const total = categoryReports.length;
     const encours = categoryReports.filter(
-      (report) => report.status === "daaq_drse"
+      (report) => report.status === "en_cours"
     ).length;
     const resolus = categoryReports.filter(
       (report) => report.status === "finalise"
@@ -314,7 +212,6 @@ const ReportsView = () => {
     return { total, encours, resolus };
   };
 
-  // Fonction pour formater la date
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     try {
@@ -329,68 +226,41 @@ const ReportsView = () => {
     }
   };
 
-  // Fonction pour obtenir le statut affichable
   const getDisplayStatus = (status) => {
     const statusMap = {
-      daaq_drse: "DAAQ / DRSE",
-      cac_dagi: "CAC / DAGI",
-      transmis_autorite: "Transmis à autorité",
-      classifier: "Classifié",
-      finalise: "Finalisé",
-      doublon: "Doublon",
+      traitement_classification: "Traitement et Classification",
+      investigation: "Investigation",
+      transmis_autorite: "Transmis aux autorités compétentes",
       refuse: "Refusé",
+      classifier: "Classifié",
+      en_cours: "En cours",
+      finalise: "Finalisé",
     };
     return statusMap[status] || status;
   };
 
-  // Fonction pour obtenir l'assignation affichable
   const getDisplayAssignedTo = (assignedTo) => {
     const assignMap = {
-      cac_dagi: "CAC / DAGI",
+      investigateur: "Investigateur",
+      cac_daj: "DAAQ / CAC / DAJ",
       autorite_competente: "Autorité compétente",
     };
     return assignMap[assignedTo] || assignedTo || "Non assigné";
   };
 
-  // Régions disponibles basées sur la province sélectionnée
-  const availableRegions = useMemo(() => {
-    if (!filters.province) {
-      return madagascarRegions
-        .flatMap((prov) => prov.regions)
-        .sort((a, b) => a.localeCompare(b));
-    }
+  const allReports = useMemo(() => {
+    const sortedReports = [...reports].sort((a, b) => {
+      if (!sortConfig.key) return 0;
 
-    const provinceData = madagascarRegions.find(
-      (p) => p.province === filters.province
-    );
-    return provinceData
-      ? provinceData.regions.sort((a, b) => a.localeCompare(b))
-      : [];
-  }, [filters.province, madagascarRegions]);
-
-  // Provinces disponibles triées par ordre alphabétique
-  const availableProvinces = useMemo(() => {
-    return madagascarRegions
-      .map((p) => p.province)
-      .sort((a, b) => a.localeCompare(b));
-  }, [madagascarRegions]);
-
-  // Fonction de tri
-  const sortReports = (reportsToSort) => {
-    if (!sortConfig.key) return reportsToSort;
-
-    return [...reportsToSort].sort((a, b) => {
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
 
-      // Gestion des dates
       if (sortConfig.key === "date") {
         aValue = new Date(aValue);
         bValue = new Date(bValue);
       }
 
-      // Gestion des références
-      if (sortConfig.key === "id") {
+      if (sortConfig.key === "reference") {
         aValue = aValue.toLowerCase();
         bValue = bValue.toLowerCase();
       }
@@ -403,14 +273,10 @@ const ReportsView = () => {
       }
       return 0;
     });
-  };
 
-  // Combiner tous les signalements (triés par date desc par défaut)
-  const allReports = useMemo(() => {
-    return sortReports([...reports]);
+    return sortedReports;
   }, [reports, sortConfig]);
 
-  // Filtrer les rapports selon l'onglet et les filtres
   const filteredReports = useMemo(() => {
     let baseReports = [];
 
@@ -431,7 +297,11 @@ const ReportsView = () => {
 
       case "assignes":
         baseReports = reports.filter(
-          (r) => r.assigned_to && r.assigned_to !== "Non assigné"
+          (r) =>
+            r.assigned_to &&
+            r.assigned_to !== "Non assigné" &&
+            r.assigned_to !== "" &&
+            r.assigned_to !== null
         );
         break;
 
@@ -439,7 +309,6 @@ const ReportsView = () => {
         baseReports = allReports;
     }
 
-    // Filtrage supplémentaire par catégorie active
     if (activeCategory !== "tous") {
       baseReports = baseReports.filter(
         (report) => report.categorie === activeCategory
@@ -449,7 +318,7 @@ const ReportsView = () => {
     return baseReports.filter((report) => {
       const matchSearch =
         !filters.search ||
-        report.id.toLowerCase().includes(filters.search.toLowerCase()) ||
+        report.reference.toLowerCase().includes(filters.search.toLowerCase()) ||
         report.nom_prenom
           .toLowerCase()
           .includes(filters.search.toLowerCase()) ||
@@ -458,18 +327,12 @@ const ReportsView = () => {
             .toLowerCase()
             .includes(filters.search.toLowerCase()));
 
-      const matchRegion = !filters.region || report.region === filters.region;
-
-      const matchProvince =
-        !filters.province || report.province === filters.province;
-
       const matchStatut = !filters.statut || report.status === filters.statut;
 
-      return matchSearch && matchRegion && matchProvince && matchStatut;
+      return matchSearch && matchStatut;
     });
   }, [allReports, reports, currentTab, filters, activeCategory]);
 
-  // Pagination
   const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -478,7 +341,6 @@ const ReportsView = () => {
     indexOfLastItem
   );
 
-  // Générer les numéros de page (max 5 visibles + 1er + dernier)
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -519,7 +381,6 @@ const ReportsView = () => {
     return pages;
   };
 
-  // Fonction pour gérer le tri
   const handleSort = (key) => {
     setSortConfig((current) => ({
       key,
@@ -529,7 +390,6 @@ const ReportsView = () => {
     setCurrentPage(1);
   };
 
-  // Fonction pour obtenir l'icône de tri
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) {
       return <ArrowUpDown className="w-3 h-3 text-gray-400" />;
@@ -542,33 +402,13 @@ const ReportsView = () => {
   };
 
   const handleFilterChange = (key, value) => {
-    setFilters((prev) => {
-      const newFilters = { ...prev, [key]: value };
-
-      if (key === "province" && value) {
-        const provinceData = madagascarRegions.find(
-          (p) => p.province === value
-        );
-        if (provinceData && provinceData.regions.length > 0) {
-          const sortedRegions = provinceData.regions.sort((a, b) =>
-            a.localeCompare(b)
-          );
-          newFilters.region = sortedRegions[0];
-        }
-      } else if (key === "province" && !value) {
-        newFilters.region = "";
-      }
-
-      return newFilters;
-    });
+    setFilters((prev) => ({ ...prev, [key]: value }));
     setCurrentPage(1);
   };
 
   const resetFilters = () => {
     setFilters({
       search: "",
-      region: "",
-      province: "",
       statut: "",
     });
     setCurrentPage(1);
@@ -576,10 +416,10 @@ const ReportsView = () => {
 
   const exportReports = () => {
     const csvContent = [
-      ["Référence", "Date", "Nom/Prénom", "Catégorie", "Statut", "Assigné à"],
+      ["RÉFÉRENCE", "DATE", "NOM / PRÉNOM", "CATÉGORIE", "STATUT", "ASSIGNÉ À"],
       ...filteredReports.map((report) => [
-        report.id,
-        new Date(report.date).toLocaleDateString("fr-FR"),
+        report.reference,
+        formatDate(report.date),
         report.nom_prenom,
         report.categorieLabel || "N/A",
         getDisplayStatus(report.status),
@@ -606,7 +446,6 @@ const ReportsView = () => {
     document.body.removeChild(link);
   };
 
-  // Fonctions de gestion des actions
   const handleViewReport = (report) => {
     setSelectedReport(selectedReport?.id === report.id ? null : report);
     setExpandedSections({
@@ -620,8 +459,7 @@ const ReportsView = () => {
   const handleAssignReport = (report) => {
     setSelectedReportForAction(report);
     setAssignData({
-      assignTo: report.assigned_to || "cac_dagi",
-      reason: "",
+      assignTo: report.assigned_to || "investigateur",
     });
     setShowAssignModal(true);
   };
@@ -630,7 +468,6 @@ const ReportsView = () => {
     setSelectedReportForAction(report);
     setStatusData({
       status: report.status || "",
-      notes: "",
     });
     setShowStatusModal(true);
   };
@@ -640,36 +477,53 @@ const ReportsView = () => {
     setEditData({
       category: report.categorie,
       description: report.explication,
+      nom_prenom: report.nom_prenom,
+      email: report.email,
+      telephone: report.telephone,
+      city: report.city,
+      province: report.province,
+      region: report.region,
     });
     setShowEditModal(true);
   };
 
-  const handleClassifyReport = (report) => {
-    setSelectedReportForAction(report);
-    setClassifyData({
-      reason: "",
-    });
-    setShowClassifyModal(true);
-  };
-
-  // Nouvelle fonction pour ouvrir le modal de suppression
   const handleDeleteReport = (report) => {
     setSelectedReportForAction(report);
     setShowDeleteModal(true);
   };
 
-  // Fonction pour confirmer la suppression
-  const confirmDeleteReport = () => {
-    if (selectedReportForAction) {
-      console.log("Supprimer le signalement:", selectedReportForAction);
-      // TODO: appel API delete
-      // Après suppression réussie :
-      setShowDeleteModal(false);
-      setSelectedReportForAction(null);
+  const confirmDeleteReport = async () => {
+    if (!selectedReportForAction) return;
+
+    try {
+      const reportId = selectedReportForAction.id;
+      const response = await API.delete(`/reports/${reportId}`);
+
+      if (response.data.success) {
+        setShowDeleteModal(false);
+        setSelectedReportForAction(null);
+
+        if (selectedReport?.id === reportId) {
+          setSelectedReport(null);
+        }
+
+        await fetchReports();
+        alert("✅ Signalement supprimé avec succès!");
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        alert("❌ Signalement non trouvé. Il a peut-être déjà été supprimé.");
+        await fetchReports();
+        setShowDeleteModal(false);
+        setSelectedReportForAction(null);
+      } else if (error.response?.status === 403) {
+        alert("❌ Vous n'avez pas les droits pour supprimer ce signalement");
+      } else {
+        alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+      }
     }
   };
 
-  // Toggle des sections
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -677,25 +531,32 @@ const ReportsView = () => {
     }));
   };
 
-  // Téléchargement fichier
-  const handleDownloadFile = (fileName) => {
-    const encodedFileName = encodeURIComponent(fileName);
-    const link = document.createElement("a");
-    link.href = `http://localhost:8000/uploads/${encodedFileName}`;
-    link.download = fileName;
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadFile = async (fileName) => {
+    try {
+      const encodedFileName = encodeURIComponent(fileName);
+      const response = await API.get(`/files/${encodedFileName}/download`, {
+        responseType: "blob",
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert("Erreur lors du téléchargement du fichier");
+    }
   };
 
-  // Visualisation fichier
   const handleViewFile = (fileName) => {
     const encodedFileName = encodeURIComponent(fileName);
-    window.open(`http://localhost:8000/uploads/${encodedFileName}`, "_blank");
+    const fileUrl = `${API.defaults.baseURL}/files/${encodedFileName}`;
+    window.open(fileUrl, "_blank");
   };
 
-  // Gestion des fichiers pour nouveau signalement
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     setNewReport((prev) => ({
@@ -711,55 +572,273 @@ const ReportsView = () => {
     }));
   };
 
-  // Soumission des formulaires
-  const handleCreateReport = (e) => {
+  const handleCreateReport = async (e) => {
     e.preventDefault();
-    console.log("Nouveau signalement:", newReport);
-    // TODO: Appel API pour créer le signalement
-    setShowCreateModal(false);
-    setNewReport({ category: "", description: "", files: [] });
+
+    if (!newReport.category) {
+      alert("Veuillez sélectionner une catégorie");
+      return;
+    }
+    if (!newReport.description) {
+      alert("La description est obligatoire");
+      return;
+    }
+    if (newReport.type === "identifie" && !newReport.name) {
+      alert("Le nom est obligatoire pour un signalement identifié");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+
+      formData.append("type", newReport.type);
+      formData.append("name", newReport.name || "Anonyme");
+      formData.append("category", newReport.category);
+      formData.append("description", newReport.description);
+      formData.append("accept_terms", 1);
+      formData.append("accept_truth", 1);
+
+      if (newReport.email && newReport.email.trim()) {
+        formData.append("email", newReport.email.trim());
+      }
+      if (newReport.phone && newReport.phone.trim()) {
+        formData.append("phone", newReport.phone.trim());
+      }
+      if (newReport.address && newReport.address.trim()) {
+        formData.append("address", newReport.address.trim());
+      }
+
+      if (newReport.files.length > 0) {
+        newReport.files.forEach((file) => {
+          formData.append("files[]", file);
+        });
+      }
+
+      const response = await API.post("/reports", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (response.data.success) {
+        setNewReport({
+          category: "",
+          description: "",
+          files: [],
+          name: "",
+          email: "",
+          phone: "",
+          address: "",
+          type: "identifie",
+        });
+
+        setShowCreateModal(false);
+        await fetchReports();
+
+        alert(
+          `✅ Signalement créé avec succès!\nRéférence: ${response.data.reference}`
+        );
+      }
+    } catch (error) {
+      if (error.response?.status === 422) {
+        const errors = error.response.data.errors || {};
+        const errorMessages = Object.entries(errors)
+          .map(
+            ([field, messages]) =>
+              `• ${field}: ${
+                Array.isArray(messages) ? messages.join(", ") : messages
+              }`
+          )
+          .join("\n");
+
+        alert(`❌ Erreur de validation:\n\n${errorMessages}`);
+      } else {
+        alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+      }
+    }
   };
 
-  const handleAssignSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    console.log("Assigner:", selectedReportForAction.id, assignData);
-    // TODO: Appel API pour assigner
-    setShowAssignModal(false);
+
+    if (!selectedReportForAction) return;
+
+    try {
+      const updateData = {
+        category: editData.category,
+        description: editData.description,
+        nom_prenom: editData.nom_prenom,
+        email: editData.email,
+        telephone: editData.telephone,
+        city: editData.city,
+        province: editData.province,
+        region: editData.region,
+      };
+
+      const response = await API.put(
+        `/reports/${selectedReportForAction.id}`,
+        updateData
+      );
+
+      if (response.data.success) {
+        await fetchReports();
+        setShowEditModal(false);
+        setSelectedReportForAction(null);
+
+        if (selectedReport?.id === selectedReportForAction.id) {
+          setSelectedReport((prev) => ({ ...prev, ...updateData }));
+        }
+      }
+    } catch (error) {
+      alert(
+        "Erreur lors de la modification: " +
+          (error.response?.data?.message || error.message)
+      );
+    }
   };
 
-  const handleStatusSubmit = (e) => {
+  const handleAssignSubmit = async (e) => {
     e.preventDefault();
-    console.log(
-      "Mettre à jour statut:",
-      selectedReportForAction.id,
-      statusData
-    );
-    // TODO: Appel API pour mettre à jour le statut
-    setShowStatusModal(false);
+
+    if (!selectedReportForAction) return;
+
+    try {
+      const response = await API.post(
+        `/reports/${selectedReportForAction.id}/assign`,
+        {
+          assigned_to: assignData.assignTo,
+        }
+      );
+
+      if (response.data.success) {
+        alert("Dossier assigné avec succès!");
+        await fetchReports();
+        setShowAssignModal(false);
+        setSelectedReportForAction(null);
+      }
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.message || error.message));
+    }
   };
 
-  const handleClassifySubmit = (e) => {
+  const handleStatusSubmit = async (e) => {
     e.preventDefault();
-    console.log("Classifier:", selectedReportForAction.id, classifyData);
-    // TODO: Appel API pour classifier
-    setShowClassifyModal(false);
-  };
 
-  const handleEditSubmit = (e) => {
-    e.preventDefault();
-    console.log("Modifier:", selectedReportForAction.id, editData);
-    // TODO: Appel API pour modifier
-    setShowEditModal(false);
+    if (!selectedReportForAction || !statusData.status) {
+      alert("Veuillez sélectionner un statut");
+      return;
+    }
+
+    try {
+      const response = await API.put(
+        `/reports/${selectedReportForAction.id}/status`,
+        {
+          status: statusData.status,
+        }
+      );
+
+      if (response.data.success) {
+        alert(
+          `✅ Statut mis à jour avec succès !\nNouveau statut: ${getDisplayStatus(
+            statusData.status
+          )}`
+        );
+
+        setShowStatusModal(false);
+        setStatusData({
+          status: "",
+        });
+        setSelectedReportForAction(null);
+
+        await fetchReports();
+      }
+    } catch (error) {
+      alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+    }
   };
 
   const generateReport = (e) => {
     e.preventDefault();
-    console.log("Générer rapport:", reportData);
-    // TODO: Implémenter la génération du rapport
-    setShowReportModal(false);
+
+    const selectedCategories =
+      reportData.categories.length > 0
+        ? categories
+            .filter((cat) => reportData.categories.includes(cat.id))
+            .map((cat) => cat.name)
+        : ["Toutes les catégories"];
+
+    const reportStats = {
+      total: filteredReports.length,
+      en_cours: filteredReports.filter((r) => r.status === "en_cours").length,
+      finalise: filteredReports.filter((r) => r.status === "finalise").length,
+      traitement_classification: filteredReports.filter(
+        (r) => r.status === "traitement_classification"
+      ).length,
+      investigation: filteredReports.filter((r) => r.status === "investigation")
+        .length,
+      transmis_autorite: filteredReports.filter(
+        (r) => r.status === "transmis_autorite"
+      ).length,
+      refuse: filteredReports.filter((r) => r.status === "refuse").length,
+      classifier: filteredReports.filter((r) => r.status === "classifier")
+        .length,
+    };
+
+    const generatedReportData = {
+      type: reportData.type,
+      periode: `${formatDate(reportData.dateDebut)} - ${formatDate(
+        reportData.dateFin
+      )}`,
+      categories: selectedCategories,
+      notes: reportData.notes,
+      stats: reportStats,
+      dateGeneration: new Date().toLocaleDateString("fr-FR"),
+      heureGeneration: new Date().toLocaleTimeString("fr-FR"),
+    };
+
+    setGeneratedReport(generatedReportData);
+    setShowReportPreview(true);
   };
 
-  // Statistiques par onglet (inclut classifier et assignés)
+  const exportToPDF = () => {
+    const element = document.getElementById("report-preview");
+
+    html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+    })
+      .then((canvas) => {
+        const imgWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        const pdf = new jsPDF("p", "mm", "a4");
+        let pageCount = 1;
+
+        let imgData = canvas.toDataURL("image/jpeg", 0.98);
+
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft >= 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+          pageCount++;
+        }
+
+        pdf.save(`rapport_signalements_${generatedReport.dateGeneration}.pdf`);
+      })
+      .catch((error) => {
+        console.error("Erreur lors de la génération du PDF:", error);
+      });
+  };
+
   const getTabStats = () => {
     return {
       tous: allReports.length,
@@ -768,27 +847,28 @@ const ReportsView = () => {
         .length,
       classifier: reports.filter((r) => r.status === "classifier").length,
       assignes: reports.filter(
-        (r) => r.assigned_to && r.assigned_to !== "Non assigné"
+        (r) =>
+          r.assigned_to &&
+          r.assigned_to !== "Non assigné" &&
+          r.assigned_to !== "" &&
+          r.assigned_to !== null
       ).length,
     };
   };
 
   const tabStats = getTabStats();
 
-  // Données pour la catégorie active
   const cat = categories.find((c) => c.id === activeCategory);
   const categoryStats = calculateCategoryStats(activeCategory);
 
-  // Si un signalement est sélectionné, afficher uniquement la page de détail
-  if (selectedReport) {
+  if (selectedReport && !generatedReport) {
     return (
       <>
         <div className="p-4 bg-white min-h-screen">
-          {/* Header de la page de détail */}
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-lg font-bold text-gray-900">
-                Détail du Signalement - {selectedReport.id}
+                Détail du Signalement - {selectedReport.reference}
               </h1>
               <p className="text-xs text-gray-600 mt-1">
                 {formatDate(selectedReport.date)} •{" "}
@@ -804,9 +884,7 @@ const ReportsView = () => {
             </button>
           </div>
 
-          {/* Sections toggleables optimisées */}
           <div className="space-y-3">
-            {/* Section Informations Générales */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("general")}
@@ -831,7 +909,9 @@ const ReportsView = () => {
                       <span className="text-gray-600 block mb-1">
                         Référence:
                       </span>
-                      <p className="font-medium text-sm">{selectedReport.id}</p>
+                      <p className="font-medium text-sm">
+                        {selectedReport.reference}
+                      </p>
                     </div>
                     <div>
                       <span className="text-gray-600 block mb-1">Date:</span>
@@ -852,13 +932,13 @@ const ReportsView = () => {
                         Province:
                       </span>
                       <p className="font-medium text-sm">
-                        {selectedReport.province}
+                        {selectedReport.province || "Non spécifié"}
                       </p>
                     </div>
                     <div>
                       <span className="text-gray-600 block mb-1">Région:</span>
                       <p className="font-medium text-sm">
-                        {selectedReport.region}
+                        {selectedReport.region || "Non spécifié"}
                       </p>
                     </div>
                     <div>
@@ -871,13 +951,15 @@ const ReportsView = () => {
                       <span className="text-gray-600 block mb-1">Statut:</span>
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedReport.status === "daaq_drse"
-                            ? "bg-blue-100 text-blue-800"
-                            : selectedReport.status === "cac_dagi"
-                            ? "bg-indigo-100 text-indigo-800"
+                          selectedReport.status === "traitement_classification"
+                            ? "bg-gray-100 text-gray-800"
+                            : selectedReport.status === "investigation"
+                            ? "bg-yellow-100 text-yellow-800"
                             : selectedReport.status === "transmis_autorite"
-                            ? "bg-cyan-100 text-cyan-800"
-                            : "bg-gray-100 text-gray-800"
+                            ? "bg-purple-100 text-purple-800"
+                            : selectedReport.status === "classifier"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
                         }`}
                       >
                         {getDisplayStatus(selectedReport.status)}
@@ -889,8 +971,10 @@ const ReportsView = () => {
                       </span>
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedReport.assigned_to === "cac_dagi"
+                          selectedReport.assigned_to === "investigateur"
                             ? "bg-indigo-100 text-indigo-800"
+                            : selectedReport.assigned_to === "cac_daj"
+                            ? "bg-blue-100 text-blue-800"
                             : selectedReport.assigned_to ===
                               "autorite_competente"
                             ? "bg-cyan-100 text-cyan-800"
@@ -911,7 +995,6 @@ const ReportsView = () => {
               )}
             </div>
 
-            {/* Section Auteur */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("auteur")}
@@ -968,7 +1051,6 @@ const ReportsView = () => {
               )}
             </div>
 
-            {/* Section Description */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("description")}
@@ -995,7 +1077,6 @@ const ReportsView = () => {
               )}
             </div>
 
-            {/* Section Pièces Jointes */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("pieces")}
@@ -1020,8 +1101,6 @@ const ReportsView = () => {
                       {selectedReport.files.map((file, idx) => {
                         const fileName =
                           typeof file === "string" ? file : file.name || "";
-                        const encoded = encodeURIComponent(fileName);
-                        const url = `http://localhost:8000/uploads/${encoded}`;
                         const ext = fileName.split(".").pop()?.toLowerCase();
                         const isImage = [
                           "jpg",
@@ -1040,7 +1119,9 @@ const ReportsView = () => {
                             <div className="aspect-video bg-white flex items-center justify-center">
                               {isImage ? (
                                 <img
-                                  src={url}
+                                  src={`${
+                                    API.defaults.baseURL
+                                  }/files/${encodeURIComponent(fileName)}`}
                                   alt={fileName}
                                   className="w-full h-full object-cover"
                                   onError={(e) => {
@@ -1113,7 +1194,6 @@ const ReportsView = () => {
             </div>
           </div>
 
-          {/* Actions footer optimisées - SUPPRIMÉ le bouton "Traiter le dossier" */}
           <div className="flex justify-between items-center mt-6 pt-4 border-t">
             <div className="flex gap-2">
               <button
@@ -1146,18 +1226,10 @@ const ReportsView = () => {
                 <Filter className="w-3 h-3" />
                 Statut
               </button>
-              <button
-                onClick={() => handleClassifyReport(selectedReport)}
-                className="flex items-center gap-1 px-3 py-1 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                <Archive className="w-3 h-3" />
-                Classifier
-              </button>
             </div>
           </div>
         </div>
 
-        {/* Modals avec z-index élevé pour s'afficher devant le toggle view */}
         {showAssignModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
             <div className="bg-white rounded-lg w-full max-w-md mx-4">
@@ -1195,24 +1267,6 @@ const ReportsView = () => {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Raison de l'assignation
-                  </label>
-                  <textarea
-                    value={assignData.reason}
-                    onChange={(e) =>
-                      setAssignData((prev) => ({
-                        ...prev,
-                        reason: e.target.value,
-                      }))
-                    }
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Raison optionnelle..."
-                  />
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -1253,7 +1307,7 @@ const ReportsView = () => {
               <form onSubmit={handleStatusSubmit} className="p-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nouveau statut *
+                    Nouveau statut <span className="text-red-600">*</span>
                   </label>
                   <select
                     value={statusData.status}
@@ -1267,30 +1321,13 @@ const ReportsView = () => {
                     required
                   >
                     <option value="">Sélectionner un statut</option>
-                    {statusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
+                    <option value="investigation">Investigation</option>
+                    <option value="transmis_autorite">
+                      Transmis aux autorités compétentes
+                    </option>
+                    <option value="refuse">Refusé</option>
+                    <option value="classifier">Classifié</option>
                   </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={statusData.notes}
-                    onChange={(e) =>
-                      setStatusData((prev) => ({
-                        ...prev,
-                        notes: e.target.value,
-                      }))
-                    }
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Notes supplémentaires..."
-                  />
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -1305,60 +1342,7 @@ const ReportsView = () => {
                     type="submit"
                     className="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700"
                   >
-                    Mettre à jour
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {showClassifyModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-lg w-full max-w-md mx-4">
-              <div className="flex items-center justify-between p-4 border-b">
-                <h2 className="text-lg font-semibold">Classifier le dossier</h2>
-                <button
-                  onClick={() => setShowClassifyModal(false)}
-                  className="p-1 hover:bg-gray-100 rounded"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleClassifySubmit} className="p-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Raison de la classification *
-                  </label>
-                  <textarea
-                    value={classifyData.reason}
-                    onChange={(e) =>
-                      setClassifyData((prev) => ({
-                        ...prev,
-                        reason: e.target.value,
-                      }))
-                    }
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Expliquez la raison de la classification du dossier..."
-                    required
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t">
-                  <button
-                    type="button"
-                    onClick={() => setShowClassifyModal(false)}
-                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    Classifier
+                    Mettre à jour le statut
                   </button>
                 </div>
               </form>
@@ -1368,7 +1352,7 @@ const ReportsView = () => {
 
         {showEditModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-lg w-full max-w-2xl mx-4">
+            <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-4 border-b">
                 <h2 className="text-lg font-semibold">
                   Modifier le signalement
@@ -1382,47 +1366,244 @@ const ReportsView = () => {
               </div>
 
               <form onSubmit={handleEditSubmit} className="p-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Catégorie *
-                  </label>
-                  <select
-                    value={editData.category}
-                    onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        category: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                  >
-                    <option value="">Sélectionner une catégorie</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.emoji} {cat.name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-semibold">Type:</span>{" "}
+                    <span
+                      className={
+                        selectedReportForAction?.typesignalement === "Anonyme"
+                          ? "text-blue-600"
+                          : "text-green-600"
+                      }
+                    >
+                      {selectedReportForAction?.typesignalement}
+                    </span>
+                  </p>
                 </div>
+
+                {selectedReportForAction?.typesignalement !== "Anonyme" && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nom et Prénom
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.nomprenom}
+                          onChange={(e) =>
+                            setEditData({
+                              ...editData,
+                              nomprenom: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Nom complet"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={editData.email}
+                          onChange={(e) =>
+                            setEditData({ ...editData, email: e.target.value })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="email@exemple.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Téléphone
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.telephone}
+                          onChange={(e) =>
+                            setEditData({
+                              ...editData,
+                              telephone: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="+261 XX XX XXX XX"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Ville
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.city}
+                          onChange={(e) =>
+                            setEditData({ ...editData, city: e.target.value })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Ville"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Province
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.province}
+                          onChange={(e) =>
+                            setEditData({
+                              ...editData,
+                              province: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Province"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Catégorie
+                      </label>
+                      <select
+                        value={editData.category}
+                        onChange={(e) =>
+                          setEditData({ ...editData, category: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      >
+                        <option value="">Sélectionner une catégorie</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.emoji} {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description *
+                    Description <span className="text-red-600">*</span>
                   </label>
                   <textarea
                     value={editData.description}
                     onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        description: e.target.value,
-                      }))
+                      setEditData({ ...editData, description: e.target.value })
                     }
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
                   />
                 </div>
+
+                {selectedReportForAction?.files &&
+                  selectedReportForAction.files.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pièces jointes actuelles
+                      </label>
+                      <div className="space-y-2">
+                        {selectedReportForAction.files.map((file, index) => {
+                          const fileName =
+                            typeof file === "string" ? file : file.name;
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between bg-gray-50 p-2 rounded border"
+                            >
+                              <span className="text-sm truncate flex-1">
+                                {fileName}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newFiles =
+                                    selectedReportForAction.files.filter(
+                                      (_, i) => i !== index
+                                    );
+                                  setSelectedReportForAction({
+                                    ...selectedReportForAction,
+                                    files: newFiles,
+                                  });
+                                  setEditData({
+                                    ...editData,
+                                    filesToRemove: [
+                                      ...(editData.filesToRemove || []),
+                                      fileName,
+                                    ],
+                                  });
+                                }}
+                                className="ml-2 text-red-600 hover:text-red-800"
+                                title="Supprimer ce fichier"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ajouter de nouvelles pièces jointes
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.pdf,.mp4"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      setEditData({ ...editData, newFiles: files });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Formats: JPG, PNG, PDF, MP4 - Max 25 Mo/fichier
+                  </p>
+                </div>
+
+                {editData.newFiles && editData.newFiles.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Nouveaux fichiers à ajouter ({editData.newFiles.length})
+                    </p>
+                    <div className="space-y-2">
+                      {editData.newFiles.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-200"
+                        >
+                          <span className="text-sm truncate flex-1">
+                            {file.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newFiles = editData.newFiles.filter(
+                                (_, i) => i !== index
+                              );
+                              setEditData({ ...editData, newFiles });
+                            }}
+                            className="ml-2 text-red-600 hover:text-red-800"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <button
@@ -1444,11 +1625,9 @@ const ReportsView = () => {
           </div>
         )}
 
-        {/* Modal de Suppression Moderne */}
         {showDeleteModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
-              {/* Header avec icône d'alerte */}
               <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 rounded-t-xl">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-full">
@@ -1463,7 +1642,6 @@ const ReportsView = () => {
                 </div>
               </div>
 
-              {/* Contenu */}
               <div className="p-6">
                 <div className="flex items-center gap-4 mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
                   <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1474,7 +1652,7 @@ const ReportsView = () => {
                       Signalement à supprimer
                     </h3>
                     <p className="text-red-600 text-xs">
-                      {selectedReportForAction?.id} -{" "}
+                      {selectedReportForAction?.reference} -{" "}
                       {selectedReportForAction?.nom_prenom}
                     </p>
                   </div>
@@ -1505,7 +1683,6 @@ const ReportsView = () => {
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
                 <button
                   onClick={() => setShowDeleteModal(false)}
@@ -1528,10 +1705,414 @@ const ReportsView = () => {
     );
   }
 
-  // Page principale avec la liste des signalements
+  if (showReportModal) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Génération de Rapport
+            </h1>
+            <p className="text-sm text-gray-600 mt-2">
+              Configurez et prévisualisez votre rapport
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowReportModal(false);
+                setShowReportPreview(false);
+                setGeneratedReport(null);
+              }}
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Retour à la liste
+            </button>
+            {generatedReport && (
+              <button
+                onClick={exportToPDF}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                <Download className="w-4 h-4" />
+                Exporter PDF
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Formulaire à gauche */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Configuration du Rapport
+            </h2>
+
+            <form onSubmit={generateReport} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Type de rapport *
+                </label>
+                <select
+                  value={reportData.type}
+                  onChange={(e) =>
+                    setReportData({ ...reportData, type: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="quotidien">Quotidien</option>
+                  <option value="hebdomadaire">Hebdomadaire</option>
+                  <option value="mensuel">Mensuel</option>
+                  <option value="annuel">Annuel</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date de début *
+                  </label>
+                  <input
+                    type="date"
+                    value={reportData.dateDebut}
+                    onChange={(e) =>
+                      setReportData({
+                        ...reportData,
+                        dateDebut: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date de fin *
+                  </label>
+                  <input
+                    type="date"
+                    value={reportData.dateFin}
+                    onChange={(e) =>
+                      setReportData({ ...reportData, dateFin: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Catégories à inclure
+                </label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
+                  {categories.map((cat) => (
+                    <label key={cat.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reportData.categories.includes(cat.id)}
+                        onChange={(e) => {
+                          const newCategories = e.target.checked
+                            ? [...reportData.categories, cat.id]
+                            : reportData.categories.filter(
+                                (id) => id !== cat.id
+                              );
+                          setReportData({
+                            ...reportData,
+                            categories: newCategories,
+                          });
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">
+                        {cat.emoji} {cat.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Laissez vide pour inclure toutes les catégories
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes et observations
+                </label>
+                <textarea
+                  value={reportData.notes}
+                  onChange={(e) =>
+                    setReportData({ ...reportData, notes: e.target.value })
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Ajoutez des commentaires ou observations..."
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                Générer le Rapport
+              </button>
+            </form>
+          </div>
+
+          {/* Prévisualisation à droite */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Prévisualisation du Rapport
+            </h2>
+
+            {showReportPreview && generatedReport ? (
+              <div id="report-preview" className="pdf-export bg-white p-8">
+                {/* En-tête du rapport */}
+                <div className="text-center border-b-2 border-gray-800 pb-6 mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="text-left">
+                      <img
+                        src={repLogo}
+                        alt="République de Madagascar"
+                        className="h-16 object-contain"
+                      />
+                      <p className="text-xs font-bold text-gray-800 mt-1">
+                        REPOBLIKAN'I MADAGASIKARA
+                      </p>
+                    </div>
+
+                    <div className="text-center flex-1 mx-8">
+                      <div className="border-l border-r border-gray-400 px-8">
+                        <img
+                          src={mesupresLogo}
+                          alt="MESUPRES"
+                          className="h-16 object-contain mx-auto"
+                        />
+                        <p className="text-xs font-bold text-gray-800 mt-1 uppercase">
+                          MINISTERAN'NY FAMPIANARANA AMBONY SY FIKAROHANA
+                          ARA-TSIANSA
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <img
+                        src={fosikaLogo}
+                        alt="FOSIKA"
+                        className="h-16 object-contain ml-auto"
+                      />
+                      <p className="text-xs font-bold text-gray-800 mt-1">
+                        FOSIKA
+                      </p>
+                    </div>
+                  </div>
+
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2 uppercase">
+                    Rapport des Signalements
+                  </h1>
+                  <p className="text-lg font-semibold text-gray-700">
+                    {generatedReport.type.charAt(0).toUpperCase() +
+                      generatedReport.type.slice(1)}{" "}
+                    - {generatedReport.periode}
+                  </p>
+                </div>
+
+                {/* Informations du rapport */}
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
+                    Informations Générales
+                  </h2>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Type de rapport:</span>
+                      <span className="capitalize">{generatedReport.type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Période couverte:</span>
+                      <span>{generatedReport.periode}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">
+                        Catégories incluses:
+                      </span>
+                      <span className="text-right">
+                        {generatedReport.categories.length > 0
+                          ? generatedReport.categories.join(", ")
+                          : "Toutes les catégories"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Date de génération:</span>
+                      <span>
+                        {generatedReport.dateGeneration} à{" "}
+                        {generatedReport.heureGeneration}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Statistiques */}
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
+                    Statistiques des Signalements
+                  </h2>
+                  <div className="space-y-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Total des signalements enregistrés:</span>
+                      <span className="font-bold">
+                        {generatedReport.stats.total}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Signalements en cours de traitement:</span>
+                      <span className="font-bold text-amber-600">
+                        {generatedReport.stats.en_cours}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Signalements finalisés:</span>
+                      <span className="font-bold text-green-600">
+                        {generatedReport.stats.finalise}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>En phase de traitement et classification:</span>
+                      <span className="font-bold text-blue-600">
+                        {generatedReport.stats.traitement_classification}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>En investigation:</span>
+                      <span className="font-bold text-purple-600">
+                        {generatedReport.stats.investigation}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Transmis aux autorités compétentes:</span>
+                      <span className="font-bold text-indigo-600">
+                        {generatedReport.stats.transmis_autorite}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Signalements refusés:</span>
+                      <span className="font-bold text-red-600">
+                        {generatedReport.stats.refuse}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Analyse et synthèse professionnelle */}
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
+                    Analyse
+                  </h2>
+                  <div className="space-y-4 text-sm leading-relaxed">
+                    <p></p>
+
+                    <p>
+                      Le présent rapport d'activité du système FOSIKA couvre la
+                      période du <strong> {generatedReport.periode} </strong>
+                      et présente une analyse exhaustive des signalements reçus
+                      concernant les irrégularités dans le secteur de
+                      l'enseignement supérieur et de la recherche scientifique.
+                    </p>
+
+                    <p>
+                      Durant cette période,{" "}
+                      <strong>
+                        {generatedReport.stats.total} signalements
+                      </strong>{" "}
+                      ont été enregistrés et traités par notre système. La
+                      répartition par statut démontre l'efficacité de notre
+                      mécanisme de traitement :
+                    </p>
+
+                    <ul className="list-disc list-inside space-y-2 ml-4">
+                      <li>
+                        <strong>
+                          {generatedReport.stats.en_cours} dossiers
+                        </strong>{" "}
+                        sont actuellement en cours d'instruction active
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.finalise} affaires
+                        </strong>{" "}
+                        ont été résolues avec succès
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.investigation} cas
+                        </strong>{" "}
+                        font l'objet d'une investigation approfondie
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.transmis_autorite} dossiers
+                        </strong>{" "}
+                        ont été transmis aux autorités compétentes
+                      </li>
+                    </ul>
+
+                    <p>
+                      Le système FOSIKA continue de démontrer son utilité dans
+                      la lutte contre les fraudes académiques et les
+                      irrégularités dans l'enseignement supérieur. Notre
+                      plateforme assure un suivi rigoureux de chaque signalement
+                      depuis sa réception jusqu'à sa résolution définitive.
+                    </p>
+
+                    {generatedReport.notes && (
+                      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mt-4">
+                        <h3 className="font-bold text-blue-900 mb-2">
+                          Observations particulières :
+                        </h3>
+                        <p className="text-blue-800 whitespace-pre-wrap text-sm">
+                          {generatedReport.notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pied de page */}
+                <div className="mt-8 pt-6 border-t-2 border-gray-800 text-center text-xs text-gray-600">
+                  <p className="font-bold">
+                    © DAAQ-MESUPRES 2025 - Tous droits réservés
+                  </p>
+                  <p className="mt-1">
+                    Système FOSIKA - Plateforme de gestion des signalements
+                  </p>
+                  <p className="mt-2">
+                    Document généré le {generatedReport.dateGeneration} à{" "}
+                    {generatedReport.heureGeneration}
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    À usage officiel - Confidentiel
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">
+                  Le rapport apparaîtra ici après génération
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Configurez les paramètres et cliquez sur "Générer le Rapport"
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4">
-      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-base font-semibold">
@@ -1564,7 +2145,7 @@ const ReportsView = () => {
             className="flex items-center gap-1 px-3 py-1 text-xs border rounded-md hover:bg-gray-50"
           >
             <FileText className="w-3 h-3" />
-            Générer Rapport
+            Générer rapport
           </button>
 
           <button
@@ -1577,9 +2158,7 @@ const ReportsView = () => {
         </div>
       </div>
 
-      {/* Section Analyse Détaillée par Catégories */}
       <div className="mb-6 bg-white rounded-lg border p-4">
-        {/* Header Analyse */}
         <div className="mb-4">
           <h2 className="text-lg font-bold text-gray-900 mb-1">
             Analyse Détaillée par Catégories
@@ -1589,7 +2168,6 @@ const ReportsView = () => {
           </p>
         </div>
 
-        {/* Catégorie Tabs - Maintenant utilisées comme filtres - EN UNE SEULE LIGNE */}
         <div className="flex flex-nowrap gap-2 mb-4 overflow-x-auto pb-2">
           <button
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all whitespace-nowrap flex-shrink-0 ${
@@ -1624,7 +2202,6 @@ const ReportsView = () => {
           })}
         </div>
 
-        {/* Synthèse */}
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold text-gray-900 mb-3">
             {activeCategory === "tous"
@@ -1645,7 +2222,7 @@ const ReportsView = () => {
             <div className="bg-white p-4 rounded-lg shadow-sm border text-center">
               <div className="text-2xl font-bold text-amber-600">
                 {activeCategory === "tous"
-                  ? reports.filter((r) => r.status === "daaq_drse").length
+                  ? reports.filter((r) => r.status === "en_cours").length
                   : categoryStats.encours}
               </div>
               <div className="text-gray-500 text-sm mt-1">En cours</div>
@@ -1662,7 +2239,6 @@ const ReportsView = () => {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-3">
         <button
           className={
@@ -1735,8 +2311,7 @@ const ReportsView = () => {
         </button>
       </div>
 
-      {/* Filtres - Sans catégorie */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
         <div className="md:col-span-2">
           <input
             type="text"
@@ -1749,51 +2324,20 @@ const ReportsView = () => {
 
         <div>
           <select
-            value={filters.province}
-            onChange={(e) => handleFilterChange("province", e.target.value)}
-            className="w-full px-2 py-1 text-xs border rounded-md"
-          >
-            <option value="">Toutes les provinces</option>
-            {availableProvinces.map((prov) => (
-              <option key={prov} value={prov}>
-                {prov}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <select
-            value={filters.region}
-            onChange={(e) => handleFilterChange("region", e.target.value)}
-            className="w-full px-2 py-1 text-xs border rounded-md max-h-32 overflow-y-auto"
-          >
-            <option value="">Toutes les régions</option>
-            {availableRegions.map((reg) => (
-              <option key={reg} value={reg}>
-                {reg}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <select
             value={filters.statut}
             onChange={(e) => handleFilterChange("statut", e.target.value)}
             className="w-full px-2 py-1 text-xs border rounded-md"
           >
             <option value="">Tous les statuts</option>
-            <option value="daaq_drse">DAAQ / DRSE</option>
-            <option value="cac_dagi">CAC / DAGI</option>
-            <option value="transmis_autorite">Transmis à autorité</option>
-            <option value="classifier">Classifié</option>
+            <option value="en_cours">En cours</option>
             <option value="finalise">Finalisé</option>
+            <option value="classifier">Classifié</option>
+            <option value="doublon">Doublon</option>
+            <option value="refuse">Refusé</option>
           </select>
         </div>
       </div>
 
-      {/* Bouton reset filtres + info compte */}
       <div className="flex items-center justify-between mb-2 text-xs">
         <button
           onClick={resetFilters}
@@ -1807,7 +2351,6 @@ const ReportsView = () => {
         </div>
       </div>
 
-      {/* Erreur */}
       {error && (
         <div className="flex items-center gap-2 p-2 mb-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md">
           <AlertCircle className="w-4 h-4" />
@@ -1815,7 +2358,6 @@ const ReportsView = () => {
         </div>
       )}
 
-      {/* Tableau des signalements avec tri */}
       <div className="border rounded-md overflow-hidden">
         <div className="overflow-x-auto">
           {isLoading ? (
@@ -1832,11 +2374,11 @@ const ReportsView = () => {
                 <tr>
                   <th className="px-2 py-2 text-left">
                     <button
-                      onClick={() => handleSort("id")}
+                      onClick={() => handleSort("reference")}
                       className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                     >
-                      <span>Référence</span>
-                      {getSortIcon("id")}
+                      <span>RÉFÉRENCE</span>
+                      {getSortIcon("reference")}
                     </button>
                   </th>
                   <th className="px-2 py-2 text-left">
@@ -1844,39 +2386,41 @@ const ReportsView = () => {
                       onClick={() => handleSort("date")}
                       className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                     >
-                      <span>Date</span>
+                      <span>DATE</span>
                       {getSortIcon("date")}
                     </button>
                   </th>
-                  <th className="px-2 py-2 text-left">Nom / Prénom</th>
-                  <th className="px-2 py-2 text-left">Catégorie</th>
-                  <th className="px-2 py-2 text-left">Statut</th>
-                  <th className="px-2 py-2 text-left">Assigné à</th>
-                  <th className="px-2 py-2 text-left">Actions</th>
+                  <th className="px-2 py-2 text-left">NOM / PRÉNOM</th>
+                  <th className="px-2 py-2 text-left">CATÉGORIE</th>
+                  <th className="px-2 py-2 text-left">STATUT</th>
+                  <th className="px-2 py-2 text-left">ASSIGNÉ À</th>
+                  <th className="px-2 py-2 text-left">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedReports.map((report) => (
                   <tr key={report.id} className="border-t hover:bg-gray-50">
-                    <td className="px-2 py-2 font-medium">{report.id}</td>
+                    <td className="px-2 py-2 font-medium">
+                      {report.reference}
+                    </td>
                     <td className="px-2 py-2">{formatDate(report.date)}</td>
                     <td className="px-2 py-2">{report.nom_prenom}</td>
                     <td className="px-2 py-2">{report.categorieLabel}</td>
                     <td className="px-2 py-2">
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          report.status === "daaq_drse"
-                            ? "bg-blue-100 text-blue-800"
-                            : report.status === "cac_dagi"
-                            ? "bg-indigo-100 text-indigo-800"
-                            : report.status === "transmis_autorite"
-                            ? "bg-cyan-100 text-cyan-800"
-                            : report.status === "classifier"
+                          report.status === "traitement_classification"
                             ? "bg-gray-100 text-gray-800"
+                            : report.status === "investigation"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : report.status === "transmis_autorite"
+                            ? "bg-purple-100 text-purple-800"
+                            : report.status === "classifier"
+                            ? "bg-green-100 text-green-800"
+                            : report.status === "en_cours"
+                            ? "bg-amber-100 text-amber-800"
                             : report.status === "finalise"
                             ? "bg-green-100 text-green-800"
-                            : report.status === "doublon"
-                            ? "bg-yellow-100 text-yellow-800"
                             : "bg-red-100 text-red-800"
                         }`}
                       >
@@ -1886,8 +2430,10 @@ const ReportsView = () => {
                     <td className="px-2 py-2">
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          report.assigned_to === "cac_dagi"
+                          report.assigned_to === "investigateur"
                             ? "bg-indigo-100 text-indigo-800"
+                            : report.assigned_to === "cac_daj"
+                            ? "bg-blue-100 text-blue-800"
                             : report.assigned_to === "autorite_competente"
                             ? "bg-cyan-100 text-cyan-800"
                             : "bg-gray-100 text-gray-800"
@@ -1920,13 +2466,6 @@ const ReportsView = () => {
                           <Filter className="w-3 h-3" />
                         </button>
                         <button
-                          onClick={() => handleClassifyReport(report)}
-                          className="p-1 text-purple-600 hover:bg-purple-100 rounded transition-colors"
-                          title="Classifier"
-                        >
-                          <Archive className="w-3 h-3" />
-                        </button>
-                        <button
                           onClick={() => handleEditReport(report)}
                           className="p-1 text-indigo-600 hover:bg-indigo-100 rounded transition-colors"
                           title="Modifier"
@@ -1949,7 +2488,6 @@ const ReportsView = () => {
           )}
         </div>
 
-        {/* Pagination */}
         {filteredReports.length > 0 && (
           <div className="flex items-center justify-between px-2 py-2 border-t bg-gray-50">
             <div className="flex items-center gap-2 text-xs">
@@ -2020,80 +2558,129 @@ const ReportsView = () => {
         )}
       </div>
 
-      {/* Modal Nouveau Signalement réduit */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-            {/* Header moderne */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 rounded-t-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 bg-white/20 rounded-lg">
-                    <Plus className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white">
-                      Nouveau Signalement
-                    </h2>
-                    <p className="text-blue-100 text-xs">
-                      Créer un nouveau signalement
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="p-1 text-white hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
+              <h2 className="text-lg font-semibold">Nouveau Signalement</h2>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <form onSubmit={handleCreateReport} className="p-4 space-y-4">
-              {/* Informations de base */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Référence *
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type de signalement <span className="text-red-600">*</span>
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="type"
+                      value="identifie"
+                      checked={newReport.type === "identifie"}
+                      onChange={(e) =>
+                        setNewReport({ ...newReport, type: e.target.value })
+                      }
+                      className="w-4 h-4"
+                    />
+                    <span>Je m'identifie</span>
                   </label>
-                  <input
-                    type="text"
-                    value={generateReference()}
-                    disabled
-                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Générée automatiquement
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Date *
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="type"
+                      value="anonyme"
+                      checked={newReport.type === "anonyme"}
+                      onChange={(e) =>
+                        setNewReport({ ...newReport, type: e.target.value })
+                      }
+                      className="w-4 h-4"
+                    />
+                    <span>Anonyme</span>
                   </label>
-                  <input
-                    type="date"
-                    value={new Date().toISOString().split("T")[0]}
-                    disabled
-                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                  />
                 </div>
               </div>
 
-              {/* Catégorie */}
+              {newReport.type === "identifie" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nom et Prénom <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newReport.name}
+                      onChange={(e) =>
+                        setNewReport({ ...newReport, name: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="Votre nom complet"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={newReport.email}
+                        onChange={(e) =>
+                          setNewReport({ ...newReport, email: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="email@exemple.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Téléphone
+                      </label>
+                      <input
+                        type="tel"
+                        value={newReport.phone}
+                        onChange={(e) =>
+                          setNewReport({ ...newReport, phone: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="+261 XX XX XXX XX"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Adresse
+                    </label>
+                    <input
+                      type="text"
+                      value={newReport.address}
+                      onChange={(e) =>
+                        setNewReport({ ...newReport, address: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="Ville, région..."
+                    />
+                  </div>
+                </>
+              )}
+
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Catégorie *
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Catégorie <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={newReport.category}
                   onChange={(e) =>
-                    setNewReport((prev) => ({
-                      ...prev,
-                      category: e.target.value,
-                    }))
+                    setNewReport({ ...newReport, category: e.target.value })
                   }
-                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   required
                 >
                   <option value="">Sélectionner une catégorie</option>
@@ -2105,235 +2692,81 @@ const ReportsView = () => {
                 </select>
               </div>
 
-              {/* Description */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Description *
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description <span className="text-red-600">*</span>
                 </label>
                 <textarea
                   value={newReport.description}
                   onChange={(e) =>
-                    setNewReport((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
+                    setNewReport({ ...newReport, description: e.target.value })
                   }
-                  rows={3}
-                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Décrivez le signalement en détail..."
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Décrivez en détail la situation..."
                   required
                 />
               </div>
 
-              {/* Pièces jointes */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Preuves (Pièces jointes)
-                </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center">
-                  <input
-                    type="file"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="cursor-pointer flex flex-col items-center justify-center"
-                  >
-                    <Download className="w-5 h-5 text-gray-400 mb-1" />
-                    <p className="text-xs text-gray-600">
-                      <span className="text-blue-600 hover:text-blue-500">
-                        Cliquez pour télécharger
-                      </span>{" "}
-                      ou glissez-déposez
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      PNG, JPG, PDF, DOC jusqu'à 10MB
-                    </p>
-                  </label>
-                </div>
-                {newReport.files.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    <h4 className="text-xs font-medium text-gray-700">
-                      Fichiers sélectionnés:
-                    </h4>
-                    {newReport.files.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
-                            <span className="text-blue-600 text-xs font-medium">
-                              {file.name.split(".").pop()?.toUpperCase()}
-                            </span>
-                          </div>
-                          <span className="text-xs font-medium truncate max-w-[120px]">
-                            {file.name}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(index)}
-                          className="text-red-600 hover:text-red-800 p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  Ajouter
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Générer Rapport */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg w-full max-w-md mx-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Générer un Rapport</h2>
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={generateReport} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type de rapport *
+                  Pièces jointes (optionnel)
                 </label>
-                <select
-                  value={reportData.type}
-                  onChange={(e) =>
-                    setReportData((prev) => ({
-                      ...prev,
-                      type: e.target.value,
-                    }))
-                  }
+                <input
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.pdf,.mp4"
+                  onChange={handleFileChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                  required
-                >
-                  <option value="quotidien">Quotidien</option>
-                  <option value="hebdomadaire">Hebdomadaire</option>
-                  <option value="mensuel">Mensuel</option>
-                  <option value="personnalise">Personnalisé</option>
-                </select>
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Formats: JPG, PNG, PDF, MP4 - Max 25 Mo/fichier
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date début *
-                  </label>
-                  <input
-                    type="date"
-                    value={reportData.dateDebut}
-                    onChange={(e) =>
-                      setReportData((prev) => ({
-                        ...prev,
-                        dateDebut: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date fin *
-                  </label>
-                  <input
-                    type="date"
-                    value={reportData.dateFin}
-                    onChange={(e) =>
-                      setReportData((prev) => ({
-                        ...prev,
-                        dateFin: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Catégories (optionnel)
-                </label>
-                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2">
-                  {categories.map((cat) => (
-                    <label
-                      key={cat.id}
-                      className="flex items-center gap-2 mb-1 text-sm"
+              {newReport.files.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">
+                    Fichiers ajoutés ({newReport.files.length})
+                  </p>
+                  {newReport.files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between bg-gray-50 p-2 rounded"
                     >
-                      <input
-                        type="checkbox"
-                        checked={reportData.categories.includes(cat.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setReportData((prev) => ({
-                              ...prev,
-                              categories: [...prev.categories, cat.id],
-                            }));
-                          } else {
-                            setReportData((prev) => ({
-                              ...prev,
-                              categories: prev.categories.filter(
-                                (id) => id !== cat.id
-                              ),
-                            }));
-                          }
-                        }}
-                        className="rounded"
-                      />
-                      <span>
-                        {cat.emoji} {cat.name}
+                      <span className="text-sm truncate flex-1">
+                        {file.name}
                       </span>
-                    </label>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="ml-2 text-red-600 hover:text-red-800"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
-              </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
-                  onClick={() => setShowReportModal(false)}
+                  onClick={() => setShowCreateModal(false)}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  disabled={
+                    !newReport.category ||
+                    !newReport.description ||
+                    (newReport.type === "identifie" && !newReport.name.trim())
+                  }
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Générer Rapport
+                  Créer le signalement
                 </button>
               </div>
             </form>
@@ -2341,7 +2774,6 @@ const ReportsView = () => {
         </div>
       )}
 
-      {/* Les autres modals pour la page principale */}
       {showAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md mx-4">
@@ -2379,24 +2811,6 @@ const ReportsView = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Raison de l'assignation
-                </label>
-                <textarea
-                  value={assignData.reason}
-                  onChange={(e) =>
-                    setAssignData((prev) => ({
-                      ...prev,
-                      reason: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Raison optionnelle..."
-                />
-              </div>
-
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
@@ -2418,7 +2832,7 @@ const ReportsView = () => {
       )}
 
       {showStatusModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md mx-4">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">Mettre à jour le statut</h2>
@@ -2433,7 +2847,7 @@ const ReportsView = () => {
             <form onSubmit={handleStatusSubmit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nouveau statut *
+                  Nouveau statut <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={statusData.status}
@@ -2447,30 +2861,13 @@ const ReportsView = () => {
                   required
                 >
                   <option value="">Sélectionner un statut</option>
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
+                  <option value="investigation">Investigation</option>
+                  <option value="transmis_autorite">
+                    Transmis aux autorités compétentes
+                  </option>
+                  <option value="refuse">Refusé</option>
+                  <option value="classifier">Classifié</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={statusData.notes}
-                  onChange={(e) =>
-                    setStatusData((prev) => ({
-                      ...prev,
-                      notes: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Notes supplémentaires..."
-                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
@@ -2485,60 +2882,7 @@ const ReportsView = () => {
                   type="submit"
                   className="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700"
                 >
-                  Mettre à jour
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showClassifyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg w-full max-w-md mx-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Classifier le dossier</h2>
-              <button
-                onClick={() => setShowClassifyModal(false)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleClassifySubmit} className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Raison de la classification *
-                </label>
-                <textarea
-                  value={classifyData.reason}
-                  onChange={(e) =>
-                    setClassifyData((prev) => ({
-                      ...prev,
-                      reason: e.target.value,
-                    }))
-                  }
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Expliquez la raison de la classification du dossier..."
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowClassifyModal(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                >
-                  Classifier
+                  Mettre à jour le statut
                 </button>
               </div>
             </form>
@@ -2547,8 +2891,8 @@ const ReportsView = () => {
       )}
 
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg w-full max-w-2xl mx-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">Modifier le signalement</h2>
               <button
@@ -2560,20 +2904,131 @@ const ReportsView = () => {
             </div>
 
             <form onSubmit={handleEditSubmit} className="p-4 space-y-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold">Type:</span>{" "}
+                  <span
+                    className={
+                      selectedReportForAction?.typesignalement === "Anonyme"
+                        ? "text-blue-600"
+                        : "text-green-600"
+                    }
+                  >
+                    {selectedReportForAction?.typesignalement}
+                  </span>
+                </p>
+                {selectedReportForAction?.typesignalement === "Anonyme" && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ Seuls la description et les pièces jointes peuvent être
+                    modifiés pour un signalement anonyme
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nom et Prénom
+                  </label>
+                  <input
+                    type="text"
+                    value={editData.nomprenom}
+                    onChange={(e) =>
+                      setEditData({ ...editData, nomprenom: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    placeholder="Nom complet"
+                    disabled={
+                      selectedReportForAction?.typesignalement === "Anonyme"
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editData.email}
+                    onChange={(e) =>
+                      setEditData({ ...editData, email: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    placeholder="email@exemple.com"
+                    disabled={
+                      selectedReportForAction?.typesignalement === "Anonyme"
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Téléphone
+                  </label>
+                  <input
+                    type="text"
+                    value={editData.telephone}
+                    onChange={(e) =>
+                      setEditData({ ...editData, telephone: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    placeholder="+261 XX XX XXX XX"
+                    disabled={
+                      selectedReportForAction?.typesignalement === "Anonyme"
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ville
+                  </label>
+                  <input
+                    type="text"
+                    value={editData.city}
+                    onChange={(e) =>
+                      setEditData({ ...editData, city: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    placeholder="Ville"
+                    disabled={
+                      selectedReportForAction?.typesignalement === "Anonyme"
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Province
+                  </label>
+                  <input
+                    type="text"
+                    value={editData.province}
+                    onChange={(e) =>
+                      setEditData({ ...editData, province: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    placeholder="Province"
+                    disabled={
+                      selectedReportForAction?.typesignalement === "Anonyme"
+                    }
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Catégorie *
+                  Catégorie
                 </label>
                 <select
                   value={editData.category}
                   onChange={(e) =>
-                    setEditData((prev) => ({
-                      ...prev,
-                      category: e.target.value,
-                    }))
+                    setEditData({ ...editData, category: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                  disabled={
+                    selectedReportForAction?.typesignalement === "Anonyme"
+                  }
                 >
                   <option value="">Sélectionner une catégorie</option>
                   {categories.map((cat) => (
@@ -2586,21 +3041,118 @@ const ReportsView = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description *
+                  Description <span className="text-red-600">*</span>
                 </label>
                 <textarea
                   value={editData.description}
                   onChange={(e) =>
-                    setEditData((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
+                    setEditData({ ...editData, description: e.target.value })
                   }
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
+
+              {selectedReportForAction?.files &&
+                selectedReportForAction.files.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pièces jointes actuelles
+                    </label>
+                    <div className="space-y-2">
+                      {selectedReportForAction.files.map((file, index) => {
+                        const fileName =
+                          typeof file === "string" ? file : file.name;
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between bg-gray-50 p-2 rounded border"
+                          >
+                            <span className="text-sm truncate flex-1">
+                              {fileName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newFiles =
+                                  selectedReportForAction.files.filter(
+                                    (_, i) => i !== index
+                                  );
+                                setSelectedReportForAction({
+                                  ...selectedReportForAction,
+                                  files: newFiles,
+                                });
+                                setEditData({
+                                  ...editData,
+                                  filesToRemove: [
+                                    ...(editData.filesToRemove || []),
+                                    fileName,
+                                  ],
+                                });
+                              }}
+                              className="ml-2 text-red-600 hover:text-red-800"
+                              title="Supprimer ce fichier"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ajouter de nouvelles pièces jointes
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.pdf,.mp4"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files);
+                    setEditData({ ...editData, newFiles: files });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Formats: JPG, PNG, PDF, MP4 - Max 25 Mo/fichier
+                </p>
+              </div>
+
+              {editData.newFiles && editData.newFiles.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Nouveaux fichiers à ajouter ({editData.newFiles.length})
+                  </p>
+                  <div className="space-y-2">
+                    {editData.newFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-200"
+                      >
+                        <span className="text-sm truncate flex-1">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newFiles = editData.newFiles.filter(
+                              (_, i) => i !== index
+                            );
+                            setEditData({ ...editData, newFiles });
+                          }}
+                          className="ml-2 text-red-600 hover:text-red-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
@@ -2622,11 +3174,9 @@ const ReportsView = () => {
         </div>
       )}
 
-      {/* Modal de Suppression Moderne pour la page principale */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
-            {/* Header avec icône d'alerte */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 rounded-t-xl">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-full">
@@ -2641,7 +3191,6 @@ const ReportsView = () => {
               </div>
             </div>
 
-            {/* Contenu */}
             <div className="p-6">
               <div className="flex items-center gap-4 mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
                 <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -2652,7 +3201,7 @@ const ReportsView = () => {
                     Signalement à supprimer
                   </h3>
                   <p className="text-red-600 text-xs">
-                    {selectedReportForAction?.id} -{" "}
+                    {selectedReportForAction?.reference} -{" "}
                     {selectedReportForAction?.nom_prenom}
                   </p>
                 </div>
@@ -2682,7 +3231,6 @@ const ReportsView = () => {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
               <button
                 onClick={() => setShowDeleteModal(false)}

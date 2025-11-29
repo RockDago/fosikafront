@@ -29,7 +29,7 @@ const pieColors = [
 const defaultCategoryStructure = [
   {
     id: "faux-diplomes",
-    name: "Faux Diplômes",
+    name: "Faux diplômes",
     subtitle: "Délivrance illégale de diplômes",
     icon: "📜",
   },
@@ -41,7 +41,7 @@ const defaultCategoryStructure = [
   },
   {
     id: "recrutements-irreguliers",
-    name: "Recrutements Irréguliers",
+    name: "Recrutements irréguliers",
     subtitle: "Transparence et intégrité",
     icon: "👥",
   },
@@ -87,22 +87,12 @@ export default function DashboardView() {
   });
   const [monthTotal, setMonthTotal] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const [refreshInterval, setRefreshInterval] = useState(null);
 
   useEffect(() => {
     initializeCategoriesWithZero();
     fetchDashboardData();
 
-    // Auto-refresh toutes les minutes
-    const interval = setInterval(() => {
-      fetchDashboardData();
-    }, 60000);
-
-    setRefreshInterval(interval);
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    // Suppression de l'auto-refresh
   }, []);
 
   useEffect(() => {
@@ -211,7 +201,7 @@ export default function DashboardView() {
 
     const statsData = { total, en_cours, finalise, by_category };
     updateGlobalStats(statsData);
-    updateCategoriesWithRealData(statsData);
+    updateCategoriesWithRealData(statsData, reports); // Passer les reports ici
   };
 
   const updateGlobalStats = (statsData) => {
@@ -222,11 +212,12 @@ export default function DashboardView() {
     });
   };
 
-  const updateCategoriesWithRealData = (statsData) => {
+  const updateCategoriesWithRealData = (statsData, reports) => {
     const updatedCategories = defaultCategoryStructure.map((category) => {
       const realTotal = statsData.by_category?.[category.id] || 0;
+      
       // Calcul réel des en cours et résolus par catégorie
-      const categoryReports = allReports.filter(
+      const categoryReports = reports.filter(
         (report) => report.category === category.id
       );
       const encours = categoryReports.filter(
@@ -286,10 +277,10 @@ export default function DashboardView() {
 
   const getCategoryLabel = (categoryId) => {
     const categoryMap = {
-      "faux-diplomes": "Faux Diplômes",
+      "faux-diplomes": "Faux diplômes",
       "offre-formation-irreguliere":
         "Offre de formation irrégulière (non habilité)",
-      "recrutements-irreguliers": "Recrutements Irréguliers",
+      "recrutements-irreguliers": "Recrutements irréguliers",
       harcelement: "Harcèlement",
       corruption: "Corruption",
       divers: "Divers",
@@ -773,9 +764,8 @@ export default function DashboardView() {
       if (chartInstance.current) chartInstance.current.destroy();
       if (barChartInstance.current) barChartInstance.current.destroy();
       if (pieChartInstance.current) pieChartInstance.current.destroy();
-      if (refreshInterval) clearInterval(refreshInterval);
     };
-  }, [refreshInterval]);
+  }, []);
 
   if (loading) {
     return (
@@ -793,7 +783,7 @@ export default function DashboardView() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Tableau de Bord</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
           <p className="text-gray-600 mt-2">
             Vue d'ensemble globale de tous les signalements
           </p>
@@ -805,7 +795,7 @@ export default function DashboardView() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Signalements</p>
+                <p className="text-sm text-gray-600">Total signalements</p>
                 <p className="text-2xl font-bold text-gray-900 mt-2">
                   {globalStats.total}
                 </p>
@@ -832,7 +822,7 @@ export default function DashboardView() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">En Cours</p>
+                <p className="text-sm text-gray-600">En cours</p>
                 <p className="text-2xl font-bold text-orange-600 mt-2">
                   {globalStats.en_cours}
                 </p>
@@ -910,15 +900,14 @@ export default function DashboardView() {
           </div>
         </div>
 
-        {/* Catégories */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {/* Catégories - 3x3 avec taille normale et sans redirection */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {categories.map((cat) => (
             <div
               key={cat.id}
-              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 cursor-pointer"
-              onClick={() => navigate(`/dashboard/categories?id=${cat.id}`)}
+              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4"
             >
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <span className="text-2xl">{cat.icon}</span>
                 <span className="text-xl font-semibold text-gray-900">
                   {cat.total}
@@ -927,7 +916,7 @@ export default function DashboardView() {
               <h3 className="font-semibold text-gray-900 text-base mb-1">
                 {cat.name}
               </h3>
-              <p className="text-sm text-gray-500 mb-4">{cat.subtitle}</p>
+              <p className="text-sm text-gray-500 mb-3">{cat.subtitle}</p>
               <div className="flex justify-between text-sm">
                 <span className="text-orange-600">En cours: {cat.encours}</span>
                 <span className="text-green-600">Résolus: {cat.resolus}</span>
@@ -940,7 +929,7 @@ export default function DashboardView() {
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900">
-              Évolution des Signalements
+              Évolution des signalements
             </h2>
             <div className="flex items-center space-x-3">
               <div className="relative">
@@ -997,7 +986,7 @@ export default function DashboardView() {
           {/* Diagramme circulaire en bas */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Répartition par Catégories
+              Répartition par catégories
             </h2>
             <div className="h-80">
               <canvas ref={pieChartRef}></canvas>
@@ -1009,7 +998,7 @@ export default function DashboardView() {
         <div className="bg-white rounded-lg shadow mt-6">
           <div className="p-6 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900">
-              Signalements Récents
+              Signalements récents
             </h2>
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600">Afficher:</span>
@@ -1024,7 +1013,6 @@ export default function DashboardView() {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              <span className="text-sm text-gray-500">(Auto-refresh 1min)</span>
             </div>
           </div>
           <div className="overflow-x-auto">

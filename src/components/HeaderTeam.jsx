@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   CheckCircle,
 } from "lucide-react";
+import API from "../config/axios";
+import LogoFosika from "../assets/images/logo fosika.png";
 
 const HeaderTeam = ({
   onNavigateToNotifications,
@@ -62,6 +64,8 @@ const HeaderTeam = ({
     return () => clearInterval(interval);
   }, []);
 
+  // Dans HeaderTeam.jsx, mettre à jour fetchRecentNotifications :
+
   const fetchRecentNotifications = async () => {
     try {
       const token =
@@ -69,47 +73,39 @@ const HeaderTeam = ({
         sessionStorage.getItem(`${userRole}_token`);
       if (!token) return;
 
-      const response = await fetch(
-        "http://localhost:8000/api/notifications/recent",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
+      // Utiliser la nouvelle route par rôle
+      const response = await API.get("/notifications/recent-by-role", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setRecentNotifications(result.data || []);
-          setUnreadCount(
-            result.data?.filter((n) => n.status === "active").length || 0
-          );
-        }
+      if (response.data.success) {
+        setRecentNotifications(response.data.data || []);
+        setUnreadCount(
+          response.data.data?.filter((n) => n.status === "active").length || 0
+        );
       }
     } catch (error) {
       console.error("Erreur chargement notifications récentes:", error);
     }
   };
-
   const markNotificationAsRead = async (notificationId) => {
     try {
       const token =
         localStorage.getItem(`${userRole}_token`) ||
         sessionStorage.getItem(`${userRole}_token`);
-      const response = await fetch(
-        `http://localhost:8000/api/notifications/${notificationId}/read`,
+      const response = await API.post(
+        `/notifications/${notificationId}/read`,
+        {},
         {
-          method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
-            Accept: "application/json",
           },
         }
       );
 
-      if (response.ok) {
+      if (response.status === 200) {
         setRecentNotifications((prev) =>
           prev.map((notif) =>
             notif.id === notificationId ? { ...notif, status: "read" } : notif
@@ -131,19 +127,14 @@ const HeaderTeam = ({
 
       console.log("🔄 Fetching user profile for header...");
 
-      const response = await fetch(
-        `http://localhost:8000/api/${userRole}/profile`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          cache: "no-cache",
-        }
-      );
+      const response = await API.get(`/${userRole}/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status === 200) {
+        const data = response.data;
         if (data.success) {
           console.log("✅ Profile data loaded for header:", data.data);
           setLocalUserData(data.data);
@@ -215,7 +206,7 @@ const HeaderTeam = ({
     let avatarUrl = data.avatar;
     if (!avatarUrl.includes("http")) {
       // Si c'est un chemin relatif, ajouter l'URL de base
-      avatarUrl = `http://localhost:8000${
+      avatarUrl = `${API.defaults.baseURL}${
         avatarUrl.startsWith("/") ? "" : "/"
       }${avatarUrl}`;
     }
@@ -311,11 +302,13 @@ const HeaderTeam = ({
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-50">
-        <div className="flex items-center">
-          <div className="text-2xl font-bold text-blue-600 font-serif">
-            FOSIKA
-          </div>
+      <header className="fixed top-0 left-0 right-0 h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-50">
+        <div className="flex items-center ml-6">
+          <img
+            src={LogoFosika}
+            alt="FOSIKA Logo"
+            className="w-32 h-32 object-contain"
+          />
         </div>
 
         <div className="flex items-center gap-4">
@@ -325,7 +318,7 @@ const HeaderTeam = ({
               onClick={() =>
                 setNotificationDropdownOpen(!notificationDropdownOpen)
               }
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative"
+              className="p-3 rounded-lg hover:bg-gray-100 transition-colors relative"
             >
               <Bell className="w-6 h-6 text-gray-600" />
               {unreadCount > 0 && (
@@ -407,7 +400,7 @@ const HeaderTeam = ({
           <div className="relative">
             <button
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <div
                 className={`w-10 h-10 ${currentRole.bg} rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative`}

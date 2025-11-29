@@ -4,24 +4,18 @@ export const teamAPI = {
   // ==================== PROFIL TEAM ====================
   getProfile: async (userRole) => {
     try {
-      console.log(`🔄 API Call: GET /${userRole}/profile`);
       const response = await axios.get(`/${userRole}/profile`);
-      console.log("✅ Profil team récupéré:", response.data);
       return response.data;
     } catch (error) {
-      console.error("❌ Erreur lors de la récupération du profil team:", error);
       throw error;
     }
   },
 
   updateProfile: async (userRole, profileData) => {
     try {
-      console.log(`🔄 API Call: PUT /${userRole}/profile`, profileData);
       const response = await axios.put(`/${userRole}/profile`, profileData);
-      console.log("✅ Profil team mis à jour:", response.data);
       return response.data;
     } catch (error) {
-      console.error("❌ Erreur lors de la mise à jour du profil team:", error);
       throw error;
     }
   },
@@ -31,7 +25,6 @@ export const teamAPI = {
       const formData = new FormData();
       formData.append("avatar", avatarFile);
 
-      console.log(`🔄 API Call: POST /${userRole}/profile/avatar`);
       const response = await axios.post(
         `/${userRole}/profile/avatar`,
         formData,
@@ -41,43 +34,29 @@ export const teamAPI = {
           },
         }
       );
-      console.log("✅ Avatar team mis à jour:", response.data);
       return response.data;
     } catch (error) {
-      console.error(
-        "❌ Erreur lors de la mise à jour de l'avatar team:",
-        error
-      );
       throw error;
     }
   },
 
   updatePassword: async (userRole, passwordData) => {
     try {
-      console.log(`🔄 API Call: POST /${userRole}/profile/password`);
       const response = await axios.post(
         `/${userRole}/profile/password`,
         passwordData
       );
-      console.log("✅ Mot de passe team mis à jour:", response.data);
       return response.data;
     } catch (error) {
-      console.error(
-        "❌ Erreur lors du changement de mot de passe team:",
-        error
-      );
       throw error;
     }
   },
 
   getPersonalStats: async (userRole) => {
     try {
-      console.log(`🔄 API Call: GET /${userRole}/profile/stats`);
       const response = await axios.get(`/${userRole}/profile/stats`);
-      console.log("✅ Stats personnelles récupérées:", response.data);
       return response.data;
     } catch (error) {
-      console.error("❌ Erreur lors de la récupération des stats:", error);
       throw error;
     }
   },
@@ -98,16 +77,6 @@ export const teamUtils = {
 
     storage.setItem("user_type", userRole);
 
-    console.log(`🔑 Données auth ${userRole} stockées:`, {
-      rememberMe,
-      userData: userData?.email,
-      specificToken: `${userRole}_token = ${
-        storage.getItem(`${userRole}_token`) ? "OUI" : "NON"
-      }`,
-      genericToken: `team_token = ${
-        storage.getItem("team_token") ? "OUI" : "NON"
-      }`,
-    });
   },
 
   getAuthToken: (userRole) => {
@@ -117,7 +86,6 @@ export const teamUtils = {
       localStorage.getItem(`${userRole}_token`) ||
       sessionStorage.getItem(`${userRole}_token`);
     if (specificToken) {
-      console.log(`🔑 Token trouvé via clé spécifique: ${userRole}_token`);
       return specificToken;
     }
 
@@ -126,7 +94,6 @@ export const teamUtils = {
       localStorage.getItem("team_token") ||
       sessionStorage.getItem("team_token");
     if (genericToken) {
-      console.log(`🔑 Token trouvé via clé générique: team_token`);
       return genericToken;
     }
 
@@ -138,7 +105,6 @@ export const teamUtils = {
         localStorage.getItem(`${role}_token`) ||
         sessionStorage.getItem(`${role}_token`);
       if (token) {
-        console.log(`🔑 Token trouvé via recherche étendue: ${role}_token`);
         return token;
       }
     }
@@ -151,30 +117,11 @@ export const teamUtils = {
         localStorage.getItem(`${userType.toLowerCase()}_token`) ||
         sessionStorage.getItem(`${userType.toLowerCase()}_token`);
       if (userTypeToken) {
-        console.log(`🔑 Token trouvé via user_type: ${userType}_token`);
         return userTypeToken;
       }
     }
 
-    console.log(`❌ Aucun token trouvé pour ${userRole}`);
-
     // DEBUG: Afficher l'état complet du storage pour le débogage
-    console.log("🐛 État actuel du storage:", {
-      localStorage: {
-        agent_token: localStorage.getItem("agent_token"),
-        investigateur_token: localStorage.getItem("investigateur_token"),
-        admin_token: localStorage.getItem("admin_token"),
-        team_token: localStorage.getItem("team_token"),
-        user_type: localStorage.getItem("user_type"),
-      },
-      sessionStorage: {
-        agent_token: sessionStorage.getItem("agent_token"),
-        investigateur_token: sessionStorage.getItem("investigateur_token"),
-        admin_token: sessionStorage.getItem("admin_token"),
-        team_token: sessionStorage.getItem("team_token"),
-        user_type: sessionStorage.getItem("user_type"),
-      },
-    });
 
     return null;
   },
@@ -186,9 +133,6 @@ export const teamUtils = {
       localStorage.getItem(`${userRole}_user`) ||
       sessionStorage.getItem(`${userRole}_user`);
     if (specificUser) {
-      console.log(
-        `👤 Données utilisateur trouvées via clé spécifique: ${userRole}_user`
-      );
       return JSON.parse(specificUser);
     }
 
@@ -196,9 +140,6 @@ export const teamUtils = {
     const genericUser =
       localStorage.getItem("team_user") || sessionStorage.getItem("team_user");
     if (genericUser) {
-      console.log(
-        `👤 Données utilisateur trouvées via clé générique: team_user`
-      );
       return JSON.parse(genericUser);
     }
 
@@ -209,14 +150,10 @@ export const teamUtils = {
         localStorage.getItem(`${role}_user`) ||
         sessionStorage.getItem(`${role}_user`);
       if (userData) {
-        console.log(
-          `👤 Données utilisateur trouvées via recherche étendue: ${role}_user`
-        );
         return JSON.parse(userData);
       }
     }
 
-    console.log(`❌ Aucune donnée utilisateur trouvée pour ${userRole}`);
     return null;
   },
 
@@ -225,12 +162,6 @@ export const teamUtils = {
     const user = teamUtils.getAuthUser(userRole);
     const isAuth = !!(token && user);
 
-    console.log(`🔐 Authentification ${userRole}:`, {
-      authenticated: isAuth,
-      hasToken: !!token,
-      hasUser: !!user,
-      userRole: user?.role,
-    });
     return isAuth;
   },
 
@@ -258,40 +189,12 @@ export const teamUtils = {
       sessionStorage.removeItem(key);
     });
 
-    console.log(
-      `🔓 Déconnexion ${userRole} effectuée - toutes les données nettoyées`
-    );
-
     // DEBUG: Afficher l'état après nettoyage
     teamUtils.debugStorage();
   },
 
   // 🔍 MÉTHODE UTILITAIRE POUR DÉBOGUER LE STOCKAGE
   debugStorage: () => {
-    console.log("🐛 DEBUG STORAGE - Contenu actuel:", {
-      localStorage: {
-        agent_token: localStorage.getItem("agent_token") ? "PRESENT" : "ABSENT",
-        investigateur_token: localStorage.getItem("investigateur_token")
-          ? "PRESENT"
-          : "ABSENT",
-        admin_token: localStorage.getItem("admin_token") ? "PRESENT" : "ABSENT",
-        team_token: localStorage.getItem("team_token") ? "PRESENT" : "ABSENT",
-        user_type: localStorage.getItem("user_type"),
-      },
-      sessionStorage: {
-        agent_token: sessionStorage.getItem("agent_token")
-          ? "PRESENT"
-          : "ABSENT",
-        investigateur_token: sessionStorage.getItem("investigateur_token")
-          ? "PRESENT"
-          : "ABSENT",
-        admin_token: sessionStorage.getItem("admin_token")
-          ? "PRESENT"
-          : "ABSENT",
-        team_token: sessionStorage.getItem("team_token") ? "PRESENT" : "ABSENT",
-        user_type: sessionStorage.getItem("user_type"),
-      },
-    });
   },
 };
 

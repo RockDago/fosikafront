@@ -11,7 +11,7 @@ import axios, { clearAuthData } from "../config/axios"; // ✅ Import d'Axios co
 
 // Import des nouvelles vues
 import AnalyseView from "./views/AnalyseView";
-import RapportsView from "./views/RapportsView";
+
 import EquipeView from "./views/EquipeView";
 
 const PlaceholderView = ({ viewName }) => (
@@ -49,10 +49,8 @@ const DashboardAdmin = ({ onDeconnexion }) => {
     const checkSession = async () => {
       try {
         await axios.get("/admin/check");
-        console.log("✅ Session valide vérifiée");
       } catch (error) {
         if (error.response?.status === 401) {
-          console.log("🔒 Session expirée, déconnexion automatique...");
           handleSessionExpired();
         }
       }
@@ -69,13 +67,11 @@ const DashboardAdmin = ({ onDeconnexion }) => {
   // Écouter les événements de déconnexion depuis d'autres onglets
   useEffect(() => {
     const handleSessionInvalidated = () => {
-      console.log("🔒 Déconnexion forcée depuis un autre onglet");
       handleSessionExpired();
     };
 
     const handleStorageChange = (e) => {
       if (e.key === "admin_token" && !e.newValue) {
-        console.log("🔒 Token supprimé depuis un autre onglet");
         handleSessionExpired();
       }
     };
@@ -111,18 +107,14 @@ const DashboardAdmin = ({ onDeconnexion }) => {
         sessionStorage.getItem("admin_token");
       if (!token) return;
 
-      console.log("🔄 Dashboard: Fetching admin data...");
-
       // ✅ UTILISATION D'AXIOS AU LIEU DE FETCH
       const response = await axios.get("/admin/profile");
 
-      console.log("✅ Dashboard: Admin data received:", response.data);
       if (response.data.success) {
         setAdminData(response.data.data);
         setData(response.data.data); // mettre aussi dans "data"
       }
     } catch (error) {
-      console.error("❌ Dashboard: Error loading admin data:", error);
       if (error.response?.status === 401) {
         handleSessionExpired();
       }
@@ -195,8 +187,7 @@ const DashboardAdmin = ({ onDeconnexion }) => {
         return (
           <AnalyseView data={displayData} selectedCategory={selectedCategory} />
         );
-      case "rapports":
-        return <RapportsView data={displayData} />;
+
       case "equipe":
         return <EquipeView data={displayData} />;
       default:

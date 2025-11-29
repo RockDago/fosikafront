@@ -44,21 +44,17 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
 
   const fetchAdminProfile = useCallback(async () => {
     if (!authUtils.isAuthenticated()) {
-      console.error("❌ No authentication token found");
       setErrors({ submit: "Session expirée. Veuillez vous reconnecter." });
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log("🔄 Fetching admin profile...");
 
       const response = await adminAPI.getProfile();
-      console.log("✅ API Response:", response);
 
       if (response.success) {
         const { data } = response;
-        console.log("📊 Profile data received:", data);
 
         setAdminData((prev) => ({
           ...prev,
@@ -70,23 +66,19 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         }));
 
         if (data.avatar) {
-          console.log("🖼️ Avatar URL from API:", data.avatar);
           // Ajouter un timestamp pour éviter le cache
           setAvatarPreview(`${data.avatar}?t=${new Date().getTime()}`);
         } else {
-          console.log("📝 No avatar found, using initials");
           setAvatarPreview("");
         }
 
         setErrors({});
       } else {
-        console.warn("⚠️ Response without success:", response);
         setErrors({
           submit: response.message || "Erreur lors du chargement du profil",
         });
       }
     } catch (error) {
-      console.error("❌ Error loading profile:", error);
       handleApiError(error, "Erreur lors du chargement du profil");
     } finally {
       setIsLoading(false);
@@ -94,7 +86,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
   }, [handleApiError]);
 
   useEffect(() => {
-    console.log("🔍 Starting profile fetch...");
     fetchAdminProfile();
   }, [fetchAdminProfile]);
 
@@ -151,9 +142,7 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
       };
       reader.readAsDataURL(file);
 
-      console.log("🔄 Uploading avatar...");
       const response = await adminAPI.updateAvatar(file);
-      console.log("✅ Avatar upload response:", response);
 
       if (response.success) {
         const newAvatarUrl = response.data?.avatar_url || response.avatar_url;
@@ -174,7 +163,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         }, 500);
       }
     } catch (error) {
-      console.error("❌ Error updating avatar:", error);
       handleApiError(error, "Erreur lors du téléchargement de l'avatar");
       fetchAdminProfile();
     } finally {
@@ -202,7 +190,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         phone: adminData.phone.trim(),
       };
 
-      console.log("🔄 Updating profile with data:", profileData);
       const response = await adminAPI.updateProfile(profileData);
 
       if (response.success) {
@@ -218,7 +205,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         }
       }
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du profil:", error);
       handleApiError(error, "Erreur lors de la mise à jour des informations");
     } finally {
       setIsLoading(false);
@@ -249,7 +235,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         new_password_confirmation: adminData.new_password_confirmation,
       };
 
-      console.log("🔄 Changing password...");
       const response = await adminAPI.updatePassword(passwordData);
 
       if (response.success) {
@@ -265,7 +250,6 @@ const AdminProfile = ({ onReturnToDashboard, onAvatarUpdate }) => {
         setErrors({});
       }
     } catch (error) {
-      console.error("Erreur lors du changement de mot de passe:", error);
       handleApiError(error, "Erreur lors du changement de mot de passe");
     } finally {
       setIsLoading(false);

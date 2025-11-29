@@ -6,22 +6,18 @@ import DashboardAdmin from "./DashboardAdmin";
 import DashboardAgent from "./DashboardAgent";
 import DashboardInvestigation from "./DashboardInvest";
 
+// Import du logo Fosika
+import fosikaLogo from "../assets/images/logo fosika.png";
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [token, setToken] = useState(
-    localStorage.getItem("admin_token") || sessionStorage.getItem("admin_token")
-  );
-  const [teamToken, setTeamToken] = useState(
-    teamUtils.getAuthToken("agent") ||
-      teamUtils.getAuthToken("investigateur") ||
-      teamUtils.getAuthToken("admin")
-  );
-  const [userType, setUserType] = useState(
-    localStorage.getItem("user_type") || sessionStorage.getItem("user_type")
-  );
+  // Ne pas initialiser depuis le stockage pour éviter un rendu
+  // immédiat de dashboard basé sur des valeurs potentiellement obsolètes.
+  const [teamToken, setTeamToken] = useState(null);
+  const [userType, setUserType] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +58,7 @@ const Login = () => {
         }
       } catch (teamError) {
         // Continuer vers la connexion admin si échec team
-        console.log("❌ Échec connexion team, tentative admin...");
+        console.log("❌ Échec connexion team, tentative admin...", teamError);
       }
 
       // ✅ Essai de connexion Admin
@@ -73,32 +69,38 @@ const Login = () => {
         });
 
         const authToken = res.data.token;
-        setToken(authToken);
         setUserType("admin");
 
         teamUtils.setAuthData(authToken, res.data.user, rememberMe, "admin");
 
         console.log("✅ Connexion admin réussie");
       } catch (adminError) {
-        if (
+        let errorMessage = "Erreur de connexion avec le serveur";
+
+        // Essayer d'extraire le message d'erreur dans l'ordre de priorité
+        if (adminError?.message) {
+          errorMessage = adminError.message;
+        } else if (adminError.response?.data?.message) {
+          errorMessage = adminError.response.data.message;
+        } else if (
           adminError.response?.status === 401 ||
           adminError.response?.status === 400
         ) {
-          setError("Email ou mot de passe incorrect");
+          errorMessage = "Email ou mot de passe incorrect";
         } else if (adminError.response?.status === 403) {
-          setError("Votre compte a été désactivé");
-        } else {
-          setError(
-            adminError.response?.data?.message ||
-              "Erreur de connexion avec le serveur admin"
-          );
+          errorMessage = "Votre compte a été désactivé";
         }
-        console.error("❌ Erreur connexion admin:", adminError.response?.data);
+
+        setError(errorMessage);
+        console.error(
+          "❌ Erreur connexion admin:",
+          adminError.response?.data || adminError.message
+        );
       }
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Une erreur inattendue est survenue"
-      );
+      const errorMessage =
+        err.response?.data?.message || "Une erreur inattendue est survenue";
+      setError(errorMessage);
       console.error("❌ Erreur générale:", err);
     } finally {
       setLoading(false);
@@ -134,12 +136,42 @@ const Login = () => {
 
     teamUtils.logout(userType?.toLowerCase());
 
-    setToken(null);
+    // token state removed; clear teamToken only
     setTeamToken(null);
     setUserType(null);
     setEmail("");
     setPassword("");
   };
+
+  useEffect(() => {
+    const handleTokenExpired = (event) => {
+      console.log("⏰ Session expirée - déconnexion");
+      setError(
+        "Votre session a expiré ou vous vous êtes connecté depuis un autre appareil. Vous allez être redirigé vers la page de connexion."
+      );
+      teamUtils.logout(userType?.toLowerCase());
+      setTeamToken(null);
+      setUserType(null);
+      setEmail("");
+      setPassword("");
+    };
+
+    const handleAccountDisabled = (event) => {
+      console.log("🔒 Compte désactivé");
+      setError("Votre compte a été désactivé. Contactez l'administrateur.");
+      teamUtils.logout(userType?.toLowerCase());
+      setTeamToken(null);
+      setUserType(null);
+    };
+
+    window.addEventListener("tokenExpired", handleTokenExpired);
+    window.addEventListener("accountDisabled", handleAccountDisabled);
+
+    return () => {
+      window.removeEventListener("tokenExpired", handleTokenExpired);
+      window.removeEventListener("accountDisabled", handleAccountDisabled);
+    };
+  }, [userType]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -149,21 +181,20 @@ const Login = () => {
       const possibleTeamRoles = ["agent", "investigateur", "admin"];
       for (const role of possibleTeamRoles) {
         const currentToken = teamUtils.getAuthToken(role);
-        const currentUserType =
+        const currentUserType = (
           localStorage.getItem("user_type") ||
-          sessionStorage.getItem("user_type");
+          sessionStorage.getItem("user_type") ||
+          ""
+        ).toLowerCase();
 
-        if (
-          currentToken &&
-          currentUserType &&
-          currentUserType.toLowerCase() === role
-        ) {
+        if (currentToken && currentUserType === role) {
           try {
             const res = await teamService.getCurrentUser();
             if (res.success) {
               console.log(`✅ Utilisateur ${role} authentifié`);
               setTeamToken(currentToken);
-              setUserType(currentUserType);
+              // stocker le type avec la casse attendue
+              setUserType(role);
               return;
             }
           } catch (error) {
@@ -175,16 +206,18 @@ const Login = () => {
 
       // ✅ Vérification du token Admin
       const currentAdminToken = teamUtils.getAuthToken("admin");
-      const currentUserType =
+      const currentUserType = (
         localStorage.getItem("user_type") ||
-        sessionStorage.getItem("user_type");
+        sessionStorage.getItem("user_type") ||
+        ""
+      ).toLowerCase();
 
       if (currentAdminToken && currentUserType === "admin") {
         try {
           const res = await axios.get("/admin/check");
           if (res.data.authenticated) {
             console.log("✅ Admin authentifié");
-            setToken(currentAdminToken);
+            // token is stored via teamUtils.setAuthData when logging in
             setUserType("admin");
           }
         } catch (error) {
@@ -204,37 +237,31 @@ const Login = () => {
   }, [userType, teamToken]);
 
   // ✅ Redirections vers les dashboards selon le type d'utilisateur
-  if (userType === "Admin" && teamUtils.getAuthToken("admin")) {
+  const normalizedUserType = (userType || "").toLowerCase();
+  if (normalizedUserType === "admin" && teamUtils.getAuthToken("admin")) {
     return <DashboardAdmin onDeconnexion={handleLogout} />;
-  } else if (userType === "Agent" && teamUtils.getAuthToken("agent")) {
+  } else if (
+    normalizedUserType === "agent" &&
+    teamUtils.getAuthToken("agent")
+  ) {
     return <DashboardAgent onDeconnexion={handleLogout} />;
   } else if (
-    userType === "Investigateur" &&
+    normalizedUserType === "investigateur" &&
     teamUtils.getAuthToken("investigateur")
   ) {
     return <DashboardInvestigation onDeconnexion={handleLogout} />;
-  } else if (userType === "admin" && teamUtils.getAuthToken("admin")) {
-    return <DashboardAdmin onDeconnexion={handleLogout} />;
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm border border-gray-200">
         <div className="text-center mb-6">
-          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-3">
-            <svg
-              className="w-6 h-6 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
-            </svg>
+          <div className="mx-auto w-40 h-40 rounded-full flex items-center justify-center overflow-hidden">
+            <img
+              src={fosikaLogo}
+              alt="Fosika Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <h2 className="text-xl font-bold text-gray-800">Connexion</h2>
           <p className="text-gray-600 text-sm mt-1">
@@ -270,7 +297,7 @@ const Login = () => {
                 placeholder="votre@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 text-sm"
+                className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b4cd7b] focus:border-transparent transition duration-200 text-sm"
                 required
                 disabled={loading}
               />
@@ -302,7 +329,7 @@ const Login = () => {
                 placeholder="Votre mot de passe"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3 pl-10 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 text-sm"
+                className="w-full p-3 pl-10 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b4cd7b] focus:border-transparent transition duration-200 text-sm"
                 required
                 disabled={loading}
               />
@@ -379,7 +406,7 @@ const Login = () => {
                 <div
                   className={`w-4 h-4 border-2 rounded transition duration-200 ${
                     rememberMe
-                      ? "bg-blue-600 border-blue-600"
+                      ? "bg-[#b4cd7b] border-[#b4cd7b]"
                       : "bg-white border-gray-300"
                   }`}
                 >
@@ -407,7 +434,7 @@ const Login = () => {
 
             <button
               type="button"
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium transition duration-200"
+              className="text-xs text-[#b4cd7b] hover:text-[#9ab567] font-medium transition duration-200"
               disabled={loading}
             >
               Mot de passe oublié ?
@@ -417,7 +444,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition duration-200 font-semibold shadow disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] text-sm"
+            className="w-full bg-gradient-to-r from-[#b4cd7b] to-[#9ab567] text-white p-3 rounded-lg hover:from-[#a0bd6d] hover:to-[#8aa35c] transition duration-200 font-semibold shadow disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] text-sm"
           >
             {loading ? (
               <div className="flex items-center justify-center space-x-2">
@@ -450,7 +477,7 @@ const Login = () => {
             <p>
               Mode: {rememberMe ? "Session persistante" : "Session temporaire"}
             </p>
-            <p>Copyright 2025</p>
+            <p>  copyright @ daaq-Mesupres 2025</p>
           </div>
         </div>
       </div>

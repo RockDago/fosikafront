@@ -4,32 +4,44 @@ export const API_URL = "http://127.0.0.1:8000/api";
 
 // Création d'une instance Axios
 const API = axios.create({
-  baseURL: API_URL, // Utilisation de la constante API_URL
+  baseURL: API_URL,
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
   },
-  timeout: 20000, // Timeout 20 secondes
+  timeout: 20000,
   withCredentials: false,
 });
-
-console.log(`🚀 Configuration Axios - URL de base: ${API_URL}`);
 
 // --- Gestion des tokens pour Admin ET Team ---
 
 // Intercepteur pour bloquer les requêtes admin non autorisées
 API.interceptors.request.use(
   (config) => {
-    // Ne pas envoyer de requêtes /admin/* si l'utilisateur est un team admin
-    const userType =
-      localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
+    const rawUserType =
+      localStorage.getItem("user_type") ||
+      sessionStorage.getItem("user_type") ||
+      "";
+    const userType = rawUserType.toString().toLowerCase();
 
+    const url = config.url || "";
+
+    // Bloquer l'accès aux endpoints /admin/ si l'utilisateur n'est pas admin
+    // mais EXCLURE les endpoints d'authentification (login/logout/register/check)
     if (
-      userType === "Admin" &&
-      config.url.includes("/admin/") &&
-      !config.url.includes("/admin/check")
+      url.includes("/admin/") &&
+      !url.includes("/admin/check") &&
+      !url.includes("/admin/login") &&
+      !url.includes("/admin/logout") &&
+      !url.includes("/admin/register") &&
+      userType !== "admin"
     ) {
-      console.log("🚫 Blocage requête admin pour team admin:", config.url);
+      console.warn(
+        "🔒 Tentative d'accès admin bloquée pour user_type=",
+        userType,
+        "url=",
+        url
+      );
       return Promise.reject(new Error("Accès non autorisé à cette ressource"));
     }
 
@@ -90,13 +102,11 @@ export const setTeamAuthData = (token, rememberMe = false) => {
 
 // Supprimer tous les tokens
 export const clearAuthData = () => {
-  // Nettoyer admin
   localStorage.removeItem("admin_token");
   localStorage.removeItem("user_type");
   sessionStorage.removeItem("admin_token");
   sessionStorage.removeItem("user_type");
 
-  // Nettoyer team
   localStorage.removeItem("team_token");
   sessionStorage.removeItem("team_token");
 };
@@ -129,86 +139,116 @@ export const getUserType = () => {
 // --- Intercepteur pour ajouter le token Bearer ---
 API.interceptors.request.use(
   (config) => {
-    const authData = getAuthToken();
+    const url = config.url || "";
 
-    if (authData) {
-      config.headers.Authorization = `Bearer ${authData.token}`;
-      console.log(
-        `🔑 Token ${
-          authData.type
-        } utilisé pour: ${config.method?.toUpperCase()} ${config.url}`
-      );
-    } else {
-      console.log(
-        `👤 Aucun token pour: ${config.method?.toUpperCase()} ${config.url}`
-      );
+    // ⚠️ NE PAS ajouter de token pour les endpoints publics
+    if (
+      url.includes("/login") ||
+      url.includes("/logout") ||
+      url.includes("/register") ||
+      url.includes("/forgot-password") ||
+      url.includes("/reset-password")
+    ) {
+      return config;
+    }
+
+    // Choix du token en fonction de l'endpoint cible:
+    // - Si on appelle /admin/*, préférer le token admin
+    // - Sinon, utiliser le token team/générique
+    let tokenToUse = null;
+    if (url.includes("/admin/")) {
+      tokenToUse =
+        localStorage.getItem("admin_token") ||
+        sessionStorage.getItem("admin_token");
+      if (tokenToUse) {
+        config.headers.Authorization = `Bearer ${tokenToUse}`;
+        console.log(
+          "✅ Token admin trouvé et ajouté:",
+          tokenToUse.substring(0, 20) + "..."
+        );
+      }
+    }
+
+    if (!tokenToUse) {
+      // fallback: team / generic token
+      const teamToken =
+        localStorage.getItem("team_token") ||
+        sessionStorage.getItem("team_token");
+      const agentToken =
+        localStorage.getItem("agent_token") ||
+        sessionStorage.getItem("agent_token");
+      const investigateurToken =
+        localStorage.getItem("investigateur_token") ||
+        sessionStorage.getItem("investigateur_token");
+
+      tokenToUse = agentToken || investigateurToken || teamToken;
+      if (tokenToUse) {
+        config.headers.Authorization = `Bearer ${tokenToUse}`;
+        console.log(
+          "✅ Token trouvé et ajouté:",
+          tokenToUse.substring(0, 20) + "..."
+        );
+      } else {
+        console.warn("⚠️ Aucun token trouvé pour la requête:", config.url);
+      }
     }
 
     return config;
   },
   (error) => {
-    console.error("❌ Erreur intercepteur request:", error);
     return Promise.reject(error);
   }
 );
 
-// --- Intercepteur pour gérer les erreurs - CORRIGÉ AVEC GESTION COMPTE DÉSACTIVÉ ---
+// --- Intercepteur pour gérer les erreurs ---
 API.interceptors.response.use(
   (response) => {
-    console.log(
-      `✅ ${response.config.method?.toUpperCase()} ${
-        response.config.url
-      } - Succès`
-    );
     return response;
   },
   (error) => {
-    if (error.code === "ERR_NETWORK") {
-      console.error(
-        `🌐 Erreur réseau: Le serveur backend n'est pas accessible à ${API_URL}`
-      );
-      console.error(
-        "Vérifiez que le serveur Laravel est démarré et accessible"
-      );
-    } else if (error.response) {
-      console.error(
-        `❌ Erreur ${error.response.status} sur ${error.config?.url}:`,
-        error.response.data
-      );
-
+    if (error.response) {
       if (error.response.status === 401) {
-        console.log("🔒 401 - Session expirée ou non autorisée");
-        console.log("📍 Nettoyage des tokens sans redirection automatique");
-        clearAuthData();
+        const url = error.config?.url || "";
+
+        // Ne déclencher tokenExpired que pour les endpoints protégés, pas pour login/logout
+        if (
+          !url.includes("/login") &&
+          !url.includes("/logout") &&
+          !url.includes("/register") &&
+          !url.includes("/forgot-password")
+        ) {
+          console.warn("⚠️ Erreur 401 détectée - Token potentiellement expiré");
+
+          error.message =
+            "Votre session a expiré ou vous vous êtes connecté depuis un autre appareil.";
+
+          window.dispatchEvent(
+            new CustomEvent("tokenExpired", {
+              detail: {
+                message: error.message,
+                originalData: error.response.data,
+              },
+            })
+          );
+        } else {
+          console.warn("⚠️ Erreur 401 sur endpoint d'authentification", url);
+          // Afficher le détail renvoyé par le serveur pour aider au débogage
+          try {
+            console.error("Détail 401 :", error.response.data);
+          } catch (e) {
+            console.error("Détail 401 non disponible", e);
+          }
+        }
       } else if (error.response.status === 403) {
-        console.log("🚫 403 - Accès refusé (compte désactivé)");
-
-        // Gestion spécifique pour les comptes désactivés
         if (error.response.data?.message?.includes("désactivé")) {
-          console.log("🚫 COMPTE DÉSACTIVÉ - Déconnexion automatique");
           clearAuthData();
-
-          // Déclencher un événement global pour informer l'application
           window.dispatchEvent(
             new CustomEvent("accountDisabled", {
               detail: error.response.data,
             })
           );
         }
-      } else if (error.response.status === 404) {
-        console.warn(`🔍 404 - Endpoint non trouvé: ${error.config?.url}`);
-      } else if (error.response.status === 422) {
-        console.warn(
-          "📝 422 - Erreur de validation:",
-          error.response.data.errors
-        );
-      } else if (error.response.status === 500) {
-        console.error("💥 500 - Erreur serveur interne:", error.response.data);
       }
-    } else if (error.request) {
-      console.error("🌐 Aucune réponse reçue:", error.request);
-    } else {
-      console.error("⚠️ Erreur Axios:", error.message);
     }
 
     return Promise.reject(error);

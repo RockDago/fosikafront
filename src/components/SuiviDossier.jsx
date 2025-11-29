@@ -184,7 +184,6 @@ export default function DossierTracker() {
           setReports([]);
         }
       } catch (error) {
-        console.error("❌ Erreur lors du chargement des signalements:", error);
         setError(error.response?.data?.message || error.message);
       } finally {
         setIsLoading(false);
@@ -259,8 +258,6 @@ export default function DossierTracker() {
       const fileName = extractFileName(file);
 
       // Construire l'URL correcte
-      // const fileUrl = `http://127.0.0.1:8000/api/files/${fileName}`;
-
       const fileUrl = `${API.defaults.baseURL}/files/${fileName}`;
 
       // Ouvrir dans un nouvel onglet
@@ -269,7 +266,6 @@ export default function DossierTracker() {
         alert("Veuillez autoriser les pop-ups pour visualiser les fichiers");
       }
     } catch (error) {
-      console.error("Erreur lors de la visualisation du fichier:", error);
       alert("Erreur lors de l'ouverture du fichier: " + error.message);
     }
   };
@@ -281,8 +277,6 @@ export default function DossierTracker() {
       const fileName = extractFileName(file);
 
       // Construire l'URL de téléchargement
-      // const downloadUrl = `http://127.0.0.1:8000/api/files/${fileName}/download`;
-
       const downloadUrl = `${API.defaults.baseURL}/files/${fileName}/download`;
 
       // Créer un lien invisible pour forcer le téléchargement
@@ -296,7 +290,6 @@ export default function DossierTracker() {
       link.click();
       document.body.removeChild(link);
     } catch (error) {
-      console.error("Erreur lors du téléchargement:", error);
       alert("Erreur lors du téléchargement: " + error.message);
     }
   };
@@ -420,6 +413,13 @@ export default function DossierTracker() {
             </div>
           </div>
         </div>
+
+        {/* COPYRIGHT AJOUTÉ - SANS CHANGER L'AFFICHAGE EXISTANT */}
+        <div className="w-full text-center py-4 mt-auto">
+          <div className="text-gray-500 text-xs">
+            copyright @ daaq-Mesupres 2025
+          </div>
+        </div>
       </div>
     );
   }
@@ -520,6 +520,13 @@ export default function DossierTracker() {
                 Retour à l'accueil
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* COPYRIGHT AJOUTÉ - SANS CHANGER L'AFFICHAGE EXISTANT */}
+        <div className="w-full text-center py-4 mt-auto">
+          <div className="text-gray-500 text-xs">
+            copyright @ daaq-Mesupres 2025
           </div>
         </div>
       </div>
@@ -940,6 +947,13 @@ export default function DossierTracker() {
             <ArrowLeft size={18} />
             Retour à l'accueil
           </button>
+        </div>
+
+        {/* COPYRIGHT AJOUTÉ SUR LA PAGE DE DÉTAILS - SANS CHANGER L'AFFICHAGE EXISTANT */}
+        <div className="w-full text-center py-4 mt-6">
+          <div className="text-gray-500 text-xs">
+            copyright @ daaq-Mesupres 2025
+          </div>
         </div>
       </div>
     </div>

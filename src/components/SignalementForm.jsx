@@ -1,12 +1,5 @@
 import React, { useState } from "react";
-import {
-  ChevronLeft,
-  Upload,
-  X,
-  Check,
-  ChevronDown,
-  AlertCircle,
-} from "lucide-react";
+import { ChevronLeft, Upload, X, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 // ✅ Importez votre NOUVELLE instance Axios configurée
@@ -246,14 +239,6 @@ const translations = {
     required: "*",
   },
 };
-
-// Fonction pour générer une référence si l'API échoue
-const generateReference = () => {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substr(2, 5).toUpperCase();
-  return `FOS-${timestamp}-${random}`;
-};
-
 // Composant Page d'accueil avec design responsive - Desktop inchangé
 const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
   const t = translations[language];
@@ -304,8 +289,8 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
         {/* Cadre vert principal sans arrondi - ORIGINAL */}
         <div className="absolute inset-0 border-4 border-[#b3d088] bg-[#f9faf7] z-0"></div>
 
-        {/* Menu de langue responsive */}
-        <div className="absolute top-4 right-4 z-50">
+        {/* Menu de langue responsive - ALIGNÉ AVEC BONJOUR ET LOGO SUR DESKTOP */}
+        <div className="absolute top-4 md:top-8 lg:top-12 right-4 z-50">
           {/* Version desktop - EXACTEMENT COMME AVANT */}
           <div className="hidden md:block">
             <div className="text-center font-semibold text-gray-800 mb-2 text-xs">
@@ -420,23 +405,32 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
 
         {/* Contenu principal - CENTRÉ VERTICALEMENT SUR MOBILE */}
         <div className="relative z-10 p-4 md:p-8 lg:p-12 pt-8 md:pt-12 lg:pt-16 h-full flex flex-col justify-center md:justify-start">
-          {/* Bonjour cher visiteur avec Logo Fosika SORTI DE LA LIGNE VERTE SUR MOBILE/TABLETTE */}
-          <div className="relative mb-4 md:mb-6 -mt-1 md:-mt-2 lg:-mt-4">
-            {/* Bonjour cher visiteur - TEXTE RÉDUIT SUR MOBILE ET TABLETTE */}
-            <div className="pl-1 md:pl-2">
-              <span className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold text-[#5e8f3e] block">
+          {/* Logo Fosika EN HAUT SUR MOBILE */}
+          <div className="absolute left-1/2 top-4 transform -translate-x-1/2 z-20 pointer-events-none md:hidden">
+            <img
+              src={LogoFosika}
+              alt="Logo Fosika"
+              className="h-32 w-auto object-contain"
+            />
+          </div>
+
+          {/* Bonjour cher visiteur - EN DESSOUS DU LOGO SUR MOBILE ET ALIGNÉ À GAUCHE */}
+          <div className="relative mb-4 md:mb-6 mt-20 md:mt-0 md:-mt-2 lg:-mt-4">
+            {/* Bonjour cher visiteur - TEXTE RÉDUIT SUR MOBILE ET ALIGNÉ À GAUCHE */}
+            <div className="pl-2 md:pl-2 text-left">
+              <span className="text-base sm:text-lg md:text-3xl lg:text-5xl font-bold text-[#5e8f3e] block">
                 {language === "fr" ? "Bonjour" : "Miarahaba"}
               </span>
-              <span className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold text-[#b3d088] inline">
+              <span className="text-base sm:text-lg md:text-3xl lg:text-5xl font-bold text-[#b3d088] inline">
                 {language === "fr" ? "cher visiteur" : "tompoko"}
               </span>
-              <span className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold text-[#223250] inline">
+              <span className="text-base sm:text-lg md:text-3xl lg:text-5xl font-bold text-[#223250] inline">
                 ,
               </span>
             </div>
 
-            {/* Logo Fosika - AGRANDI ET SORTI DE LA LIGNE VERTE SUR MOBILE/TABLETTE */}
-            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+            {/* Logo Fosika - CACHÉ SUR MOBILE (DÉJÀ AFFICHÉ EN HAUT) */}
+            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none hidden md:block">
               <img
                 src={LogoFosika}
                 alt="Logo Fosika"
@@ -445,8 +439,8 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
             </div>
           </div>
 
-          {/* LES TROIS POINTS - PETITE LARGEUR ET TOTALEMENT À GAUCHE */}
-          <div className="mb-6 bg-[#223250] rounded-[15px] md:rounded-[20px] px-3 md:px-4 py-1.5 md:py-2 w-auto inline-block mr-auto">
+          {/* LES TROIS POINTS - MASQUÉS SUR MOBILE */}
+          <div className="mb-6 bg-[#223250] rounded-[15px] md:rounded-[20px] px-3 md:px-4 py-1.5 md:py-2 w-24 inline-block mr-auto hidden md:block">
             <svg width="60" height="20" className="md:w-80 md:h-26">
               <ellipse cx="12" cy="10" rx="6" ry="6" fill="#ffffff" />
               <ellipse cx="30" cy="10" rx="6" ry="6" fill="#ffffff" />
@@ -458,21 +452,23 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
             <div className="flex-1 pl-2 md:pl-4 pr-1 md:pr-2">
               <div className="clear-both"></div>
 
-              {/* ZONE TEXTE AVEC HAUTEUR ADAPTÉE PAR ÉCRAN ET TEXTE JUSTIFIÉ */}
-              <div className="text-gray-700 text-xs md:text-sm lg:text-base leading-relaxed mb-4 md:mb-6 max-h-[350px] md:max-h-[200px] lg:max-h-[180px] overflow-y-auto pr-2 md:pr-3 pl-1 md:pl-2 scrollable-text">
+              {/* ZONE TEXTE AVEC TEXTE RÉDUIT SUR MOBILE - HAUTEUR AUTOMATIQUE SUR DESKTOP */}
+              <div className="text-gray-700 text-xs md:text-sm lg:text-base leading-relaxed mb-4 md:mb-6 max-h-[300px] md:max-h-[250px] lg:max-h-none overflow-y-auto pr-2 md:pr-3 pl-1 md:pl-2 scrollable-text">
                 {/* Premier paragraphe avec texte justifié */}
-                <p className="mb-2 md:mb-3 text-justify">{t.welcome.title}</p>
+                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
+                  {t.welcome.title}
+                </p>
 
                 {/* Deuxième paragraphe avec texte justifié */}
-                <p className="mb-2 md:mb-3 text-justify">
+                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
                   {t.welcome.subtitle}
                 </p>
 
                 <div className="mb-2 md:mb-3">
-                  <p className="font-semibold text-gray-800 mb-1 md:mb-2 text-left">
+                  <p className="font-semibold text-gray-800 mb-1 md:mb-2 text-left text-xs md:text-sm">
                     {t.welcome.initiative}
                   </p>
-                  <ul className="space-y-0.5 md:space-y-1 text-gray-700">
+                  <ul className="space-y-0.5 md:space-y-1 text-gray-700 text-xs md:text-sm">
                     {t.welcome.cases.map((item, index) => (
                       <li key={index} className="flex items-start">
                         <span className="text-[#b3d088] mr-1 md:mr-2">✓</span>
@@ -483,10 +479,10 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
                 </div>
 
                 <div className="mb-2 md:mb-3">
-                  <p className="font-semibold text-gray-800 mb-1 md:mb-2 text-left">
+                  <p className="font-semibold text-gray-800 mb-1 md:mb-2 text-left text-xs md:text-sm">
                     {t.welcome.contribute}
                   </p>
-                  <ul className="space-y-0.5 md:space-y-1 text-gray-700">
+                  <ul className="space-y-0.5 md:space-y-1 text-gray-700 text-xs md:text-sm">
                     {t.welcome.benefits.map((item, index) => (
                       <li key={index} className="flex items-start">
                         <span className="text-[#b3d088] mr-1 md:mr-2">✓</span>
@@ -496,11 +492,11 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
                   </ul>
                 </div>
 
-                <p className="mb-2 md:mb-3 text-justify">
+                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
                   {t.welcome.vigilance}
                 </p>
 
-                <p className="text-center font-bold text-[#5e8f3e] text-sm md:text-base lg:text-lg">
+                <p className="text-center font-bold text-[#5e8f3e] text-xs md:text-base lg:text-lg">
                   {t.welcome.slogan}
                 </p>
               </div>
@@ -538,6 +534,13 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
         </div>
       </div>
 
+      {/* COPYRIGHT EN DEHORS DE LA LIGNE VERTE - VISIBLE SUR TOUTES LES VERSIONS */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
+
       <style jsx>{`
         .scrollable-text::-webkit-scrollbar {
           width: 4px;
@@ -557,8 +560,6 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
     </div>
   );
 };
-
-// Composant Choix isolé - SANS BOUTON DE LANGUE
 const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
   const t = translations[language];
 
@@ -680,11 +681,17 @@ const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
           </button>
         </div>
       </div>
+
+      {/* COPYRIGHT EN DEHORS DE LA LIGNE VERTE */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
     </div>
   );
 };
 
-// NOUVEAU COMPOSANT : Étape de choix des preuves
 const ProofStep = ({ language, setStep, setHasProof, isAnonymous }) => {
   const t = translations[language];
 
@@ -826,11 +833,17 @@ const ProofStep = ({ language, setStep, setHasProof, isAnonymous }) => {
           </button>
         </div>
       </div>
+
+      {/* COPYRIGHT EN DEHORS DE LA LIGNE VERTE */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
     </div>
   );
 };
 
-// Composant Informations personnelles isolé - SANS BOUTON DE LANGUE
 const PersonalInfoStep = ({
   language,
   formData,
@@ -1044,11 +1057,17 @@ const PersonalInfoStep = ({
           </div>
         </div>
       </div>
+
+      {/* COPYRIGHT EN DEHORS DE LA LIGNE VERTE */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
     </div>
   );
 };
 
-// Composant Catégorie isolé - SANS BOUTON DE LANGUE
 const CategoryStep = ({
   language,
   selectedCategory,
@@ -1060,7 +1079,7 @@ const CategoryStep = ({
   setStep,
   isAnonymous,
   hasProof,
-  setReferenceCode, // ✅ CORRECTION : Ajout de setReferenceCode
+  setReferenceCode,
 }) => {
   const t = translations[language];
 
@@ -1069,7 +1088,6 @@ const CategoryStep = ({
     label,
   }));
 
-  // ✅ ÉTAT POUR LA CERTIFICATION DE VÉRACITÉ
   const [acceptTruth, setAcceptTruth] = useState(false);
 
   const handleNext = () => {
@@ -1078,21 +1096,18 @@ const CategoryStep = ({
     if (!formData.categoryDetails?.trim())
       newErrors.categoryDetails = t.errors.descriptionRequired;
     if (!hasProof && !acceptTruth)
-      newErrors.acceptTruth = t.errors.truthRequired; // ✅ VALIDATION SEULEMENT SANS PREUVES
+      newErrors.acceptTruth = t.errors.truthRequired;
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
-      // Si l'utilisateur a des preuves, aller à l'étape upload, sinon soumettre directement
       if (hasProof) {
         setStep(5); // Upload
       } else {
-        // ✅ SOUMETTRE DIRECTEMENT SANS PREUVES
         handleSubmitWithoutProof();
       }
     }
   };
 
-  // ✅ FONCTION CORRIGÉE POUR LA SOUMISSION SANS PREUVES
   const handleSubmitWithoutProof = async () => {
     const submitData = {
       type: isAnonymous ? "anonyme" : "identifie",
@@ -1102,9 +1117,9 @@ const CategoryStep = ({
       address: isAnonymous ? "" : formData.address,
       category: selectedCategory,
       description: formData.categoryDetails,
-      accept_terms: true, // ✅ Booléen réel
-      accept_truth: true, // ✅ Booléen réel
-      has_proof: false, // ✅ Booléen réel
+      accept_terms: true,
+      accept_truth: true,
+      has_proof: false,
     };
 
     try {
@@ -1252,7 +1267,7 @@ const CategoryStep = ({
                 )}
               </div>
 
-              {/* ✅ NOUVELLE CERTIFICATION POUR LES SIGNALEMENTS SANS PREUVES */}
+              {/* Certification pour les signalements sans preuves */}
               {!hasProof && (
                 <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-start gap-3">
@@ -1302,11 +1317,17 @@ const CategoryStep = ({
           </div>
         </div>
       </div>
+
+      {/* COPYRIGHT EN DEHORS DE LA LIGNE VERTE */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
     </div>
   );
 };
 
-// Composant Upload isolé - SANS BOUTON DE LANGUE
 const UploadStep = ({
   language,
   formData,
@@ -1364,7 +1385,6 @@ const UploadStep = ({
       setErrors((prev) => ({ ...prev, files: "" }));
     }
 
-    // Reset l'input file pour permettre la sélection des mêmes fichiers
     e.target.value = "";
   };
 
@@ -1383,16 +1403,13 @@ const UploadStep = ({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
-  // ✅ CORRECTION DE LA FONCTION validateAndSubmit
   const validateAndSubmit = () => {
     const newErrors = {};
 
-    // Si l'utilisateur a dit avoir des preuves, vérifier qu'il y a des fichiers
     if (hasProof === true && formData.files.length === 0) {
       newErrors.files = t.errors.filesRequired;
     }
 
-    // Si l'utilisateur a des fichiers, s'assurer que hasProof est true
     if (formData.files.length > 0 && hasProof !== true) {
       // Fichiers présents mais hasProof n'est pas true
     }
@@ -1606,17 +1623,22 @@ const UploadStep = ({
           </div>
         </div>
       </div>
+
+      {/* COPYRIGHT EN DEHORS DE LA LIGNE VERTE */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
     </div>
   );
 };
 
-// Composant Success isolé - SANS BOUTON DE LANGUE
 const SuccessPage = ({ language, referenceCode, resetForm, navigate }) => {
   const t = translations[language];
   const Asset8 = new URL("../assets/images/Asset 8.png", import.meta.url).href;
   const Asset9 = new URL("../assets/images/Asset 9.png", import.meta.url).href;
 
-  // Génération de référence
   const generateRef = () => {
     const date = new Date().toISOString().slice(0, 10);
     const chars =
@@ -1716,6 +1738,13 @@ const SuccessPage = ({ language, referenceCode, resetForm, navigate }) => {
           </div>
         </div>
       </div>
+
+      {/* COPYRIGHT EN DEHORS DE LA ZONE PRINCIPALE */}
+      <div className="w-full max-w-6xl text-center mt-4">
+        <div className="text-gray-500 text-xs">
+          copyright @ daaq-Mesupres 2025
+        </div>
+      </div>
     </div>
   );
 };
@@ -1809,19 +1838,6 @@ const SignalementForm = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  // Fonction pour convertir un fichier en Base64
-  const convertFileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        // Retourner le data URL complet (data:image/jpeg;base64,...)
-        resolve(reader.result);
-      };
-      reader.onerror = (error) => reject(error);
-    });
   };
 
   const resetForm = () => {

@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from "react";
 
 const JournalView = () => {
-  const [currentTab, setCurrentTab] = useState("signalements");
+  const [currentTab, setCurrentTab] = useState("systeme");
   const [filters, setFilters] = useState({
-    anonymat: "",
-    regionProvince: "",
-    dateStart: "",
-    dateEnd: "",
     user: "",
     action: "",
     status: "",
@@ -15,7 +11,6 @@ const JournalView = () => {
   });
 
   const [auditData, setAuditData] = useState({
-    audit_signalements_recus: [],
     audit_log: [],
   });
 
@@ -48,7 +43,6 @@ const JournalView = () => {
         }
       }
     } catch (error) {
-      console.error("Erreur chargement audit:", error);
     } finally {
       setIsLoading(false);
     }
@@ -84,32 +78,9 @@ const JournalView = () => {
         alert("Erreur lors de l'export");
       }
     } catch (error) {
-      console.error("Erreur export:", error);
       alert("Erreur lors de l'export");
     }
   };
-
-  // Données filtrées pour signalements reçus
-  const filteredSignalements = auditData.audit_signalements_recus.filter(
-    (sig) => {
-      const matchAnonymat =
-        !filters.anonymat || sig.type_anonymat === filters.anonymat;
-      const matchRegion =
-        !filters.regionProvince ||
-        sig.region_province === filters.regionProvince;
-
-      let matchDate = true;
-      if (filters.dateStart || filters.dateEnd) {
-        const sigDate = new Date(sig.timestamp).toISOString().split("T")[0];
-        if (filters.dateStart)
-          matchDate = matchDate && sigDate >= filters.dateStart;
-        if (filters.dateEnd)
-          matchDate = matchDate && sigDate <= filters.dateEnd;
-      }
-
-      return matchAnonymat && matchRegion && matchDate;
-    }
-  );
 
   // Données filtrées pour audit système
   const filteredAuditLog = auditData.audit_log.filter((log) => {
@@ -130,10 +101,6 @@ const JournalView = () => {
 
     return matchUser && matchAction && matchStatus && matchDate;
   });
-
-  const getUniqueValues = (data, key) => {
-    return [...new Set(data.map((item) => item[key]))].filter(Boolean);
-  };
 
   if (isLoading) {
     return (
@@ -176,31 +143,10 @@ const JournalView = () => {
             </button>
           </div>
 
-          {/* Onglets alignés avec l'export */}
+          {/* Onglet unique pour Audit Système */}
           <div className="bg-white border border-gray-200 rounded-lg p-1">
             <div className="flex gap-1">
-              <button
-                onClick={() => setCurrentTab("signalements")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg flex-1 transition-colors text-sm ${
-                  currentTab === "signalements"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <span>📋</span>
-                <span className="font-medium">Signalements Reçus</span>
-                <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
-                  {auditData.audit_signalements_recus.length}
-                </span>
-              </button>
-              <button
-                onClick={() => setCurrentTab("systeme")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg flex-1 transition-colors text-sm ${
-                  currentTab === "systeme"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg flex-1 transition-colors text-sm bg-blue-600 text-white">
                 <span>📖</span>
                 <span className="font-medium">Audit Système</span>
                 <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
@@ -211,159 +157,87 @@ const JournalView = () => {
           </div>
         </div>
 
-        {/* Filtres selon l'onglet */}
+        {/* Filtres pour audit système */}
         <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-          {currentTab === "signalements" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type anonymat
-                </label>
-                <select
-                  value={filters.anonymat}
-                  onChange={(e) =>
-                    handleFilterChange("anonymat", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Tous</option>
-                  <option value="Anonyme">Anonyme</option>
-                  <option value="Non-Anonyme">Non-Anonyme</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Région / Province
-                </label>
-                <select
-                  value={filters.regionProvince}
-                  onChange={(e) =>
-                    handleFilterChange("regionProvince", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Toutes</option>
-                  {getUniqueValues(
-                    auditData.audit_signalements_recus,
-                    "region_province"
-                  ).map((region) => (
-                    <option key={region} value={region}>
-                      {region}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date début
-                </label>
-                <input
-                  type="date"
-                  value={filters.dateStart}
-                  onChange={(e) =>
-                    handleFilterChange("dateStart", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date fin
-                </label>
-                <input
-                  type="date"
-                  value={filters.dateEnd}
-                  onChange={(e) =>
-                    handleFilterChange("dateEnd", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Utilisateur
+              </label>
+              <input
+                type="text"
+                value={filters.user}
+                onChange={(e) => handleFilterChange("user", e.target.value)}
+                placeholder="Email utilisateur..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Utilisateur
-                </label>
-                <input
-                  type="text"
-                  value={filters.user}
-                  onChange={(e) => handleFilterChange("user", e.target.value)}
-                  placeholder="Email utilisateur..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Action
-                </label>
-                <select
-                  value={filters.action}
-                  onChange={(e) => handleFilterChange("action", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Toutes les actions</option>
-                  <option value="Consultation">Consultation</option>
-                  <option value="Modification">Modification</option>
-                  <option value="Export">Export</option>
-                  <option value="Connexion">Connexion</option>
-                  <option value="Création">Création</option>
-                  <option value="Suppression">Suppression</option>
-                  <option value="Tentative d'accès">Tentative d'accès</option>
-                  <option value="Signature">Signature</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Statut
-                </label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => handleFilterChange("status", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Tous les statuts</option>
-                  <option value="Succès">Succès</option>
-                  <option value="Refusé">Refusé</option>
-                  <option value="Échec">Échec</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date début
-                </label>
-                <input
-                  type="date"
-                  value={filters.auditDateStart}
-                  onChange={(e) =>
-                    handleFilterChange("auditDateStart", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date fin
-                </label>
-                <input
-                  type="date"
-                  value={filters.auditDateEnd}
-                  onChange={(e) =>
-                    handleFilterChange("auditDateEnd", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Action
+              </label>
+              <select
+                value={filters.action}
+                onChange={(e) => handleFilterChange("action", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Toutes les actions</option>
+                <option value="Consultation">Consultation</option>
+                <option value="Modification">Modification</option>
+                <option value="Export">Export</option>
+                <option value="Connexion">Connexion</option>
+                <option value="Création">Création</option>
+                <option value="Suppression">Suppression</option>
+                <option value="Tentative d'accès">Tentative d'accès</option>
+                <option value="Signature">Signature</option>
+              </select>
             </div>
-          )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Statut
+              </label>
+              <select
+                value={filters.status}
+                onChange={(e) => handleFilterChange("status", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Tous les statuts</option>
+                <option value="Succès">Succès</option>
+                <option value="Refusé">Refusé</option>
+                <option value="Échec">Échec</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date début
+              </label>
+              <input
+                type="date"
+                value={filters.auditDateStart}
+                onChange={(e) =>
+                  handleFilterChange("auditDateStart", e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date fin
+              </label>
+              <input
+                type="date"
+                value={filters.auditDateEnd}
+                onChange={(e) =>
+                  handleFilterChange("auditDateEnd", e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Tableau sans scroll horizontal */}
@@ -372,14 +246,10 @@ const JournalView = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-md font-semibold text-gray-900">
-                  {currentTab === "signalements"
-                    ? "Signalements Reçus"
-                    : "Événements d'audit système"}
+                  Événements d'audit système
                 </h3>
                 <p className="text-gray-600 text-xs mt-1">
-                  {currentTab === "signalements"
-                    ? `${filteredSignalements.length} événements`
-                    : `${filteredAuditLog.length} événements`}
+                  {filteredAuditLog.length} événements
                 </p>
               </div>
             </div>
@@ -389,159 +259,74 @@ const JournalView = () => {
           <div className="w-full">
             <table className="w-full">
               <thead className="bg-gray-50">
-                {currentTab === "signalements" ? (
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Référence
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date & Heure
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type Anonymat
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Adresse IP
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Identité
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Téléphone
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Région / Province
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type Fraude
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                  </tr>
-                ) : (
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date & Heure
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Utilisateur
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Action
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Entité
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      IP
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Détails
-                    </th>
-                  </tr>
-                )}
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date & Heure
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Utilisateur
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Action
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Entité
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Statut
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    IP
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Détails
+                  </th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {currentTab === "signalements"
-                  ? filteredSignalements.map((sig) => (
-                      <tr key={sig.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600 font-mono">
-                          {sig.reference_dossier || "N/A"}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(sig.timestamp).toLocaleString("fr-FR")}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              sig.type_anonymat === "Anonyme"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {sig.type_anonymat}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono">
-                          {sig.adresse_ip}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {sig.identite}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {sig.telephone}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {sig.email}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {sig.region_province}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {sig.type_fraude}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            {sig.statut}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  : filteredAuditLog.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(log.timestamp).toLocaleString("fr-FR")}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {log.utilisateur}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {log.action}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {log.entite}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              log.statut.includes("Succès")
-                                ? "bg-green-100 text-green-800"
-                                : log.statut.includes("Échec")
-                                ? "bg-red-100 text-red-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {log.statut}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono">
-                          {log.ip}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          <div
-                            className="truncate max-w-xs"
-                            title={log.details}
-                          >
-                            {log.details}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                {filteredAuditLog.map((log) => (
+                  <tr key={log.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(log.timestamp).toLocaleString("fr-FR")}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {log.utilisateur}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {log.action}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {log.entite}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          log.statut.includes("Succès")
+                            ? "bg-green-100 text-green-800"
+                            : log.statut.includes("Échec")
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }`}
+                      >
+                        {log.statut}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono">
+                      {log.ip}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      <div className="truncate max-w-xs" title={log.details}>
+                        {log.details}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           {/* Message si aucun résultat */}
-          {(currentTab === "signalements" &&
-            filteredSignalements.length === 0) ||
-          (currentTab === "systeme" && filteredAuditLog.length === 0) ? (
+          {filteredAuditLog.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <div className="text-4xl mb-3">📊</div>
               <h3 className="text-md font-semibold mb-1">

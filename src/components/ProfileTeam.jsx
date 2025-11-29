@@ -52,13 +52,6 @@ const ProfileTeam = ({
   const currentRole = roleColors[userRole] || roleColors.admin;
 
   useEffect(() => {
-    console.log("🔍 Starting profile fetch...");
-    console.log("👤 User role:", userRole);
-    console.log("🔐 Auth check:", teamUtils.isAuthenticated(userRole));
-    console.log("📦 Storage check:", {
-      localStorage: localStorage.getItem(`${userRole}_token`),
-      sessionStorage: sessionStorage.getItem(`${userRole}_token`),
-    });
 
     fetchUserProfile();
   }, [userRole, userData]);
@@ -66,24 +59,19 @@ const ProfileTeam = ({
   const fetchUserProfile = async () => {
     // Vérification améliorée de l'authentification
     const token = teamUtils.getAuthToken(userRole);
-    console.log("🔑 Token found:", token ? "Yes" : "No");
 
     if (!token) {
-      console.error("❌ No authentication token found for role:", userRole);
       setErrors({ submit: "Session expirée. Veuillez vous reconnecter." });
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log("🔄 Fetching user profile for role:", userRole);
 
       const response = await teamAPI.getProfile(userRole);
-      console.log("✅ API Response:", response);
 
       if (response.success) {
         const { data } = response;
-        console.log("📊 Profile data received:", data);
 
         setProfileData((prev) => ({
           ...prev,
@@ -97,22 +85,18 @@ const ProfileTeam = ({
         }));
 
         if (data.avatar) {
-          console.log("🖼️ Avatar URL from API:", data.avatar);
           setAvatarPreview(`${data.avatar}?t=${new Date().getTime()}`);
         } else {
-          console.log("📝 No avatar found, using initials");
           setAvatarPreview("");
         }
 
         setErrors({});
       } else {
-        console.warn("⚠️ Response without success:", response);
         setErrors({
           submit: response.message || "Erreur lors du chargement du profil",
         });
       }
     } catch (error) {
-      console.error("❌ Error loading profile:", error);
       handleApiError(error, "Erreur lors du chargement du profil");
     } finally {
       setIsLoading(false);
@@ -189,13 +173,10 @@ const ProfileTeam = ({
       };
       reader.readAsDataURL(file);
 
-      console.log("🔄 Uploading avatar...");
       const response = await teamAPI.updateAvatar(userRole, file);
-      console.log("✅ Avatar upload response:", response);
 
       if (response.success) {
         const newAvatarUrl = response.data?.avatar_url || response.avatar_url;
-        console.log("🖼️ New avatar URL:", newAvatarUrl);
 
         if (newAvatarUrl) {
           setAvatarPreview(`${newAvatarUrl}?t=${new Date().getTime()}`);
@@ -214,7 +195,6 @@ const ProfileTeam = ({
         }, 500);
       }
     } catch (error) {
-      console.error("❌ Error updating avatar:", error);
       handleApiError(error, "Erreur lors du téléchargement de l'avatar");
       fetchUserProfile();
     } finally {
@@ -241,7 +221,6 @@ const ProfileTeam = ({
         adresse: profileData.adresse.trim(),
       };
 
-      console.log("🔄 Updating profile with data:", profileInfo);
       const response = await teamAPI.updateProfile(userRole, profileInfo);
 
       if (response.success) {
@@ -257,7 +236,6 @@ const ProfileTeam = ({
         }
       }
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du profil:", error);
       handleApiError(error, "Erreur lors de la mise à jour des informations");
     } finally {
       setIsLoading(false);
@@ -288,7 +266,6 @@ const ProfileTeam = ({
         new_password_confirmation: profileData.new_password_confirmation,
       };
 
-      console.log("🔄 Changing password...");
       const response = await teamAPI.updatePassword(userRole, passwordData);
 
       if (response.success) {
@@ -304,7 +281,6 @@ const ProfileTeam = ({
         setErrors({});
       }
     } catch (error) {
-      console.error("Erreur lors du changement de mot de passe:", error);
       handleApiError(error, "Erreur lors du changement de mot de passe");
     } finally {
       setIsLoading(false);

@@ -61,9 +61,6 @@ export default function AnalyseView({ selectedCategory }) {
       setIsLoading(true);
       setError(null);
       try {
-        console.log(
-          "🔄 Chargement des données depuis l'API pour AnalyseView..."
-        );
 
         const response = await fetch("http://localhost:8000/api/reports", {
           method: "GET",
@@ -73,14 +70,11 @@ export default function AnalyseView({ selectedCategory }) {
           },
         });
 
-        console.log("📋 Statut de la réponse:", response.status);
-
         if (!response.ok) {
           throw new Error(`Erreur HTTP: ${response.status}`);
         }
 
         const result = await response.json();
-        console.log("📋 Réponse brute de l'API:", result);
 
         // ADAPTATION À LA NOUVELLE STRUCTURE DE VOTRE API
         let reportsData = [];
@@ -95,15 +89,11 @@ export default function AnalyseView({ selectedCategory }) {
           // Structure: [...] (tableau direct)
           reportsData = result;
         } else {
-          console.warn("⚠️ Structure de données non reconnue:", result);
           reportsData = [];
         }
 
-        console.log("📊 Données à traiter pour AnalyseView:", reportsData);
-
         if (reportsData && reportsData.length > 0) {
           const mappedReports = reportsData.map((report) => {
-            console.log("📝 Traitement du rapport pour AnalyseView:", report);
 
             // Parser les fichiers
             let filesArray = [];
@@ -116,7 +106,6 @@ export default function AnalyseView({ selectedCategory }) {
                 }
               }
             } catch (e) {
-              console.warn("❌ Erreur parsing files:", e);
             }
 
             // Construction de l'objet rapport adapté pour AnalyseView
@@ -140,21 +129,14 @@ export default function AnalyseView({ selectedCategory }) {
               type: report.type,
             };
 
-            console.log("✅ Rapport mappé pour AnalyseView:", mappedReport);
             return mappedReport;
           });
 
-          console.log(
-            "🎉 Tous les rapports mappés pour AnalyseView:",
-            mappedReports
-          );
           setReports(mappedReports);
         } else {
-          console.log("ℹ️ Aucune donnée à afficher dans AnalyseView");
           setReports([]);
         }
       } catch (error) {
-        console.error("💥 Erreur lors de la récupération des données:", error);
         setError(error.message);
       } finally {
         setIsLoading(false);

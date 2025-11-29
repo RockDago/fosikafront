@@ -35,7 +35,6 @@ const DashboardAgentView = ({ data }) => {
         }
       }
     } catch (error) {
-      console.error("Erreur chargement stats agent:", error);
       // Données simulées en attendant l'API
       setStats({
         missionsEnCours: 3,
@@ -70,7 +69,6 @@ const DashboardAgentView = ({ data }) => {
         }
       }
     } catch (error) {
-      console.error("Erreur chargement missions récentes:", error);
       // Données simulées en attendant l'API
       setMissionsRecentes([
         {

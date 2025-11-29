@@ -7,7 +7,7 @@ const Sidebar = ({ currentView, onViewChange, collapsed, onToggle }) => {
     // { id: "analyse", label: "Analyse & Reporting", icon: "📈" },
     // { id: "rapports", label: "Rapports", icon: "📑" },
     { id: "equipe", label: "Utilisateurs", icon: "👥" },
-    // { id: "audit", label: "Log / Audit", icon: "📖" },
+    { id: "audit", label: "Log / Audit", icon: "📖" },
     // { id: "notifications", label: "Notifications", icon: "🔔" },
   ];
 

@@ -22,25 +22,11 @@ const DashboardInvest = ({ onDeconnexion }) => {
   useEffect(() => {
     const checkAuth = () => {
       const token = teamUtils.getAuthToken("investigateur");
-      console.log(
-        "🔐 Dashboard Investigateur - Token check:",
-        token ? "PRESENT" : "ABSENT"
-      );
-      console.log("📦 Storage state:", {
-        investigateur_token:
-          localStorage.getItem("investigateur_token") ||
-          sessionStorage.getItem("investigateur_token"),
-        user_type:
-          localStorage.getItem("user_type") ||
-          sessionStorage.getItem("user_type"),
-      });
 
       if (token) {
-        console.log("✅ Token found, user is authenticated");
         setIsAuthenticated(true);
         return true;
       } else {
-        console.log("❌ No token found");
         setIsAuthenticated(false);
         setIsLoading(false);
         return false;
@@ -64,7 +50,6 @@ const DashboardInvest = ({ onDeconnexion }) => {
     const checkSession = async () => {
       const token = teamUtils.getAuthToken("investigateur");
       if (!token) {
-        console.log("🔒 Token manquant pendant la vérification");
         handleSessionExpired();
         return;
       }
@@ -82,12 +67,10 @@ const DashboardInvest = ({ onDeconnexion }) => {
 
         if (!response.ok) {
           if (response.status === 401) {
-            console.log("🔒 Session expirée (401)");
             handleSessionExpired();
           }
         }
       } catch (error) {
-        console.error("❌ Erreur vérification session:", error);
       }
     };
 
@@ -98,14 +81,12 @@ const DashboardInvest = ({ onDeconnexion }) => {
   const fetchInvestData = async () => {
     const token = teamUtils.getAuthToken("investigateur");
     if (!token) {
-      console.error("❌ Dashboard Investigateur: No token available for fetch");
       handleSessionExpired();
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log("🔄 Dashboard Investigateur: Fetching investigateur data...");
 
       const response = await fetch(
         "http://localhost:8000/api/investigateur/profile",
@@ -119,32 +100,23 @@ const DashboardInvest = ({ onDeconnexion }) => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log(
-          "✅ Dashboard Investigateur: Investigateur data received:",
-          result
-        );
 
         if (result.success) {
           setInvestData(result.data);
           setData(result.data);
         } else {
-          console.error("❌ API returned error:", result.message);
         }
       } else if (response.status === 401) {
-        console.log("🔒 Session expirée lors du fetch");
         handleSessionExpired();
       } else {
-        console.error("❌ HTTP Error:", response.status);
       }
     } catch (error) {
-      console.error("❌ Dashboard Investigateur: Network error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSessionExpired = () => {
-    console.log("🚨 Session expirée - Déconnexion...");
 
     // Nettoyer le stockage
     teamUtils.logout("investigateur");
@@ -164,13 +136,11 @@ const DashboardInvest = ({ onDeconnexion }) => {
   };
 
   const handleAvatarUpdate = () => {
-    console.log("🔄 Avatar updated in ProfileTeam");
     setAvatarUpdated((prev) => prev + 1);
     setHeaderAvatarUpdate((prev) => prev + 1);
   };
 
   const handleHeaderAvatarUpdate = () => {
-    console.log("🔄 Avatar updated in Header");
     setHeaderAvatarUpdate((prev) => prev + 1);
     fetchInvestData();
   };
@@ -208,7 +178,6 @@ const DashboardInvest = ({ onDeconnexion }) => {
   };
 
   const handleNavigateToProfile = () => {
-    console.log("📍 Navigation vers le profil");
     setCurrentView("profil");
   };
 

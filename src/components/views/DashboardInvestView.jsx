@@ -1,6 +1,7 @@
 // DashboardInvestView.jsx
 import React, { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
+import API from "../../config/axios";
 
 // Palette de couleurs pour les graphiques
 const chartColors = [
@@ -28,89 +29,270 @@ const DashboardInvestView = ({ data }) => {
   const chartInstance = useRef(null);
   const barChartInstance = useRef(null);
   const pieChartInstance = useRef(null);
+
   const [timeFilter, setTimeFilter] = useState("year");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Données simulées pour les statistiques
-  const statsData = {
-    dossiersAssignes: 6,
-    soumisBianco: 2,
-    enquetesCompletees: 2,
-    totalDossiers: 6,
+  // États pour les données réelles
+  const [statsData, setStatsData] = useState({
+    dossiersAssignes: 0,
+    soumisBianco: 0,
+    enquetesCompletees: 0,
+    totalDossiers: 0,
+  });
+
+  const [categoriesData, setCategoriesData] = useState([]);
+  const [dossiersRecents, setDossiersRecents] = useState([]);
+  const [allReports, setAllReports] = useState([]);
+
+  // Charger les données réelles depuis l'API
+  useEffect(() => {
+    fetchAssignedReports();
+  }, []);
+
+  const fetchAssignedReports = async () => {
+    setIsLoading(true);
+    try {
+      console.log("🔄 Tentative de récupération des données réelles...");
+
+      // OPTION 1: Essayer d'abord l'endpoint assigné
+      try {
+        const response = await API.get("/reports/assigned");
+        console.log("✅ Données réelles chargées:", response.data);
+
+        if (response.data.success) {
+          processApiResponse(response.data);
+          return;
+        }
+      } catch (assignError) {
+        console.log(
+          "❌ Endpoint /assigned non disponible, tentative avec /reports"
+        );
+      }
+
+      // OPTION 2: Récupérer tous les rapports
+      try {
+        const response = await API.get("/reports");
+        console.log("✅ Tous les rapports chargés:", response.data);
+
+        if (response.data.success) {
+          const allReports = response.data.data || [];
+
+          // Utiliser tous les rapports disponibles
+          const assignedReports = allReports;
+
+          // Calculer les statistiques depuis les données réelles
+          const stats = {
+            dossiersAssignes: assignedReports.length,
+            soumisBianco: assignedReports.filter((r) => r.status === "finalise")
+              .length,
+            enquetesCompletees: assignedReports.filter(
+              (r) => r.status === "classifier"
+            ).length,
+            totalDossiers: assignedReports.length,
+            byCategory: {},
+          };
+
+          // Calculer les catégories depuis les données réelles
+          assignedReports.forEach((report) => {
+            const categoryName = getCategoryName(report.category);
+            stats.byCategory[categoryName] =
+              (stats.byCategory[categoryName] || 0) + 1;
+          });
+
+          processApiResponse({
+            success: true,
+            data: assignedReports,
+            stats: stats,
+          });
+          return;
+        }
+      } catch (reportsError) {
+        console.error("❌ Erreur avec l'endpoint /reports:", reportsError);
+      }
+
+      // Si les deux endpoints échouent
+      throw new Error("Impossible de charger les données depuis l'API");
+    } catch (error) {
+      console.error("❌ Erreur finale:", error);
+      // En cas d'erreur, initialiser avec des données vides
+      setAllReports([]);
+      setDossiersRecents([]);
+      setCategoriesData(getDefaultCategories());
+      setStatsData({
+        dossiersAssignes: 0,
+        soumisBianco: 0,
+        enquetesCompletees: 0,
+        totalDossiers: 0,
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Données pour les diagrammes
-  const categoriesData = [
-    { id: "faux-diplomes", name: "Faux Diplômes", total: 1, icon: "📜" },
-    {
-      id: "offre-formation-irreguliere",
-      name: "Offre de formation irrégulière (non habilité)",
-      total: 3,
-      icon: "🎓",
-    },
-    {
-      id: "recrutements-irreguliers",
-      name: "Recrutements Irréguliers",
-      total: 1,
-      icon: "💼",
-    },
-    { id: "harcelement", name: "Harcèlement", total: 0, icon: "⚠️" },
-    { id: "corruption", name: "Corruption", total: 1, icon: "🔴" },
-    { id: "divers", name: "Divers", total: 0, icon: "🏷️" },
-  ];
+  // Fonction pour traiter la réponse API
+  const processApiResponse = (apiData) => {
+    if (apiData.success) {
+      const reports = apiData.data || [];
+      const stats = apiData.stats || {};
 
-  // Données pour les dossiers assignés récemment
-  const dossiersRecents = [
-    {
-      reference: "REF-2024-001",
-      categorie: "📜 Faux Diplômes",
-      date: "2024-01-15",
-      demandeur: "Ministère des Finances",
-      statut: "En cours",
-    },
-    {
-      reference: "REF-2024-002",
-      categorie: "🎓 Offre de formation irrégulière (non habilité)",
-      date: "2024-01-10",
-      demandeur: "Cour des Comptes",
-      statut: "Soumis BIANCO",
-    },
-    {
-      reference: "REF-2024-003",
-      categorie: "🎓 Offre de formation irrégulière (non habilité)",
-      date: "2024-01-08",
-      demandeur: "Administration Territoriale",
-      statut: "En cours",
-    },
-    {
-      reference: "REF-2024-004",
-      categorie: "💼 Recrutements Irréguliers",
-      date: "2024-01-05",
-      demandeur: "Banque Centrale",
-      statut: "Complété",
-    },
-    {
-      reference: "REF-2024-005",
-      categorie: "🔴 Corruption",
-      date: "2024-01-03",
-      demandeur: "Ministère de la Justice",
-      statut: "En attente",
-    },
-    {
-      reference: "REF-2024-006",
-      categorie: "🎓 Offre de formation irrégulière (non habilité)",
-      date: "2024-01-02",
-      demandeur: "Université Nationale",
-      statut: "En cours",
-    },
-  ];
+      setAllReports(reports);
+      setStatsData({
+        dossiersAssignes: stats.dossiersAssignes || reports.length,
+        soumisBianco: stats.soumisBianco || 0,
+        enquetesCompletees: stats.enquetesCompletees || 0,
+        totalDossiers: stats.totalDossiers || reports.length,
+      });
 
-  // Générer des données temporelles basées sur le filtre
-  const generateTimeBasedData = () => {
-    let labels = [];
-    let datasets = [];
+      // Formater les dossiers récents
+      const formattedReports = reports.slice(0, 6).map((report) => ({
+        reference: report.reference || `REF-${report.id}`,
+        categorie:
+          getCategoryIcon(report.category) +
+          " " +
+          getCategoryName(report.category),
+        date: new Date(report.created_at || report.date).toLocaleDateString(
+          "fr-FR"
+        ),
+        demandeur: report.name || report.demandeur || "Anonyme",
+        statut: getStatusLabel(report.status),
+      }));
 
+      setDossiersRecents(formattedReports);
+      updateCategoriesData(stats, reports);
+    }
+  };
+
+  // Fonction pour les catégories par défaut
+  const getDefaultCategories = () => {
+    return [
+      { id: "faux-diplomes", name: "Faux Diplômes", total: 0, icon: "📜" },
+      {
+        id: "offre-formation-irreguliere",
+        name: "Offre de formation irrégulière (non habilité)",
+        total: 0,
+        icon: "🎓",
+      },
+      {
+        id: "recrutements-irreguliers",
+        name: "Recrutements Irréguliers",
+        total: 0,
+        icon: "💼",
+      },
+      { id: "harcelement", name: "Harcèlement", total: 0, icon: "⚠️" },
+      { id: "corruption", name: "Corruption", total: 0, icon: "🔴" },
+      { id: "divers", name: "Divers", total: 0, icon: "🏷️" },
+    ];
+  };
+
+  // Fonction pour mettre à jour les catégories
+  const updateCategoriesData = (stats, reports) => {
+    const defaultCategories = getDefaultCategories();
+
+    // Utiliser les stats de l'API ou calculer depuis les rapports
+    if (stats.byCategory) {
+      defaultCategories.forEach((cat) => {
+        const realCount =
+          stats.byCategory[cat.name] || stats.byCategory[cat.id] || 0;
+        cat.total = realCount;
+      });
+    } else {
+      // Calculer depuis les rapports réels
+      defaultCategories.forEach((cat) => {
+        const count = reports.filter(
+          (report) => getCategoryName(report.category) === cat.name
+        ).length;
+        cat.total = count;
+      });
+    }
+
+    setCategoriesData(defaultCategories);
+  };
+
+  const getCategoryIcon = (category) => {
+    const icons = {
+      "faux-diplomes": "📜",
+      "Faux Diplômes": "📜",
+      "Offre de formation irrégulière ( non habilité)": "🎓",
+      "offre-formation-irreguliere": "🎓",
+      "recrutements-irreguliers": "💼",
+      "Recrutements Irréguliers": "💼",
+      harcelement: "⚠️",
+      Harcèlement: "⚠️",
+      corruption: "🔴",
+      Corruption: "🔴",
+      divers: "🏷️",
+      Divers: "🏷️",
+    };
+    return icons[category] || "📋";
+  };
+
+  const getCategoryName = (category) => {
+    const names = {
+      "faux-diplomes": "Faux Diplômes",
+      "offre-formation-irreguliere":
+        "Offre de formation irrégulière (non habilité)",
+      "Offre de formation irrégulière ( non habilité)":
+        "Offre de formation irrégulière (non habilité)",
+      "recrutements-irreguliers": "Recrutements Irréguliers",
+      harcelement: "Harcèlement",
+      corruption: "Corruption",
+      divers: "Divers",
+    };
+    return names[category] || category;
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      en_cours: "En cours",
+      finalise: "Soumis BIANCO",
+      classifier: "Complété",
+      doublon: "Doublon",
+      refuse: "Refusé",
+    };
+    return labels[status] || status;
+  };
+
+  // Calculer les données par mois à partir des vrais rapports
+  const calculateMonthlyData = () => {
     const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    start.setMonth(start.getMonth() - 11);
+
+    const months = Array.from({ length: 12 }, (_, i) => {
+      return new Date(start.getFullYear(), start.getMonth() + i, 1);
+    });
+
+    // Initialiser les compteurs par catégorie et par mois
+    const dataByCategory = {};
+    categoriesData.forEach((cat) => {
+      dataByCategory[cat.name] = new Array(12).fill(0);
+    });
+
+    // Compter les rapports réels par mois et par catégorie
+    allReports.forEach((report) => {
+      const reportDate = new Date(report.created_at);
+      const monthIndex = months.findIndex((month) => {
+        return (
+          reportDate.getFullYear() === month.getFullYear() &&
+          reportDate.getMonth() === month.getMonth()
+        );
+      });
+
+      if (monthIndex !== -1) {
+        const categoryName = getCategoryName(report.category);
+        if (dataByCategory[categoryName]) {
+          dataByCategory[categoryName][monthIndex]++;
+        }
+      }
+    });
+
+    return { months, dataByCategory };
+  };
+
+  // Générer des données temporelles basées sur les VRAIES données
+  const generateTimeBasedData = () => {
     const monthsShort = [
       "Jan",
       "Fév",
@@ -126,60 +308,31 @@ const DashboardInvestView = ({ data }) => {
       "Déc",
     ];
 
-    const makeDatasets = (labelArray, rangeChecks) => {
-      return categoriesData.map((category, index) => {
-        // Générer des données aléatoires pour la démonstration
-        const data = labelArray.map(
-          () => Math.floor(Math.random() * 10) + category.total
-        );
+    const { months, dataByCategory } = calculateMonthlyData();
 
-        return {
-          label: category.name,
-          data,
-          borderColor: chartColors[index].border,
-          backgroundColor: chartColors[index].background,
-          tension: 0.4,
-          fill: false,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          borderWidth: 2,
-        };
-      });
-    };
-
-    // Filtre Année (12 derniers mois)
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    start.setMonth(start.getMonth() - 11);
-    const months = Array.from({ length: 12 }, (_, i) => {
-      const m = new Date(start.getFullYear(), start.getMonth() + i, 1);
-      return m;
-    });
-
-    labels = months.map(
+    const labels = months.map(
       (m) => monthsShort[m.getMonth()] + ` ${m.getFullYear()}`
     );
 
-    const rangeChecks = months.map((m) => (d) => {
-      return (
-        d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth()
-      );
+    const datasets = categoriesData.map((category, index) => {
+      return {
+        label: category.name,
+        data: dataByCategory[category.name] || new Array(12).fill(0),
+        borderColor: chartColors[index % chartColors.length].border,
+        backgroundColor: chartColors[index % chartColors.length].background,
+        tension: 0.4,
+        fill: false,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2,
+      };
     });
-
-    datasets = makeDatasets(labels, rangeChecks);
 
     return { labels, datasets };
   };
 
-  // Données pour le diagramme en barres par mois
+  // Données RÉELLES pour le diagramme en barres par mois
   const getReportsByMonthAndCategory = () => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    start.setMonth(start.getMonth() - 11);
-    const months = Array.from(
-      { length: 12 },
-      (_, i) => new Date(start.getFullYear(), start.getMonth() + i, 1)
-    );
-
     const monthsShort = [
       "Jan",
       "Fév",
@@ -194,21 +347,19 @@ const DashboardInvestView = ({ data }) => {
       "Nov",
       "Déc",
     ];
+
+    const { months, dataByCategory } = calculateMonthlyData();
 
     const labels = months.map(
       (m) => `${monthsShort[m.getMonth()]} ${m.getFullYear()}`
     );
 
     const datasets = categoriesData.map((category, index) => {
-      const data = months.map(
-        () => Math.floor(Math.random() * 8) + category.total
-      );
-
       return {
         label: category.name,
-        data: data,
-        backgroundColor: chartColors[index].background,
-        borderColor: chartColors[index].border,
+        data: dataByCategory[category.name] || new Array(12).fill(0),
+        backgroundColor: chartColors[index % chartColors.length].background,
+        borderColor: chartColors[index % chartColors.length].border,
         borderWidth: 1,
       };
     });
@@ -218,10 +369,18 @@ const DashboardInvestView = ({ data }) => {
 
   // Initialiser les graphiques
   useEffect(() => {
-    initializeChart();
-    initializeBarChart();
-    initializePieChart();
-  }, [timeFilter]);
+    if (!isLoading && categoriesData.length > 0 && allReports.length >= 0) {
+      initializeChart();
+      initializeBarChart();
+      initializePieChart();
+    }
+
+    return () => {
+      if (chartInstance.current) chartInstance.current.destroy();
+      if (barChartInstance.current) barChartInstance.current.destroy();
+      if (pieChartInstance.current) pieChartInstance.current.destroy();
+    };
+  }, [timeFilter, categoriesData, isLoading, allReports]);
 
   const initializeChart = () => {
     if (!chartRef.current) return;
@@ -238,7 +397,10 @@ const DashboardInvestView = ({ data }) => {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
           plugins: {
             legend: {
               display: true,
@@ -262,14 +424,17 @@ const DashboardInvestView = ({ data }) => {
               bodyFont: { size: 12 },
               callbacks: {
                 label: (context) =>
-                  `${context.dataset.label}: ${context.parsed.y} signalements`,
+                  `${context.dataset.label}: ${context.parsed.y} signalement(s)`,
               },
             },
           },
           scales: {
             y: {
               beginAtZero: true,
-              ticks: { font: { size: 12 } },
+              ticks: {
+                font: { size: 12 },
+                stepSize: 1,
+              },
               grid: { color: "rgba(120,130,140,0.06)" },
               title: {
                 display: true,
@@ -305,10 +470,7 @@ const DashboardInvestView = ({ data }) => {
       const ctx = barChartRef.current.getContext("2d");
       barChartInstance.current = new Chart(ctx, {
         type: "bar",
-        data: {
-          labels: labels,
-          datasets: datasets,
-        },
+        data: { labels: labels, datasets: datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -316,7 +478,11 @@ const DashboardInvestView = ({ data }) => {
             legend: {
               display: true,
               position: "top",
-              labels: { usePointStyle: true, font: { size: 12 }, padding: 10 },
+              labels: {
+                usePointStyle: true,
+                font: { size: 12 },
+                padding: 10,
+              },
             },
             title: {
               display: true,
@@ -329,37 +495,40 @@ const DashboardInvestView = ({ data }) => {
               bodyFont: { size: 12 },
               callbacks: {
                 label: (context) => {
-                  const val =
-                    context.parsed && context.parsed.y != null
-                      ? context.parsed.y
-                      : context.raw;
-                  return `${context.dataset.label}: ${String(
-                    val
-                  )} signalement(s)`;
+                  const val = context.parsed?.y ?? context.raw;
+                  return `${context.dataset.label}: ${val} signalement(s)`;
                 },
                 footer: (items) => {
                   const total = items.reduce(
                     (s, it) => s + (it.parsed?.y || it.raw || 0),
                     0
                   );
-                  return `Total mois: ${String(total)}`;
+                  return `Total mois: ${total}`;
                 },
               },
             },
           },
-          interaction: { mode: "index", intersect: false },
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
           scales: {
             x: {
               stacked: false,
-              title: { display: true, text: "Mois" },
+              title: {
+                display: true,
+                text: "Mois",
+              },
             },
             y: {
               stacked: false,
               beginAtZero: true,
-              title: { display: true, text: "Nombre de signalements" },
+              title: {
+                display: true,
+                text: "Nombre de signalements",
+              },
               ticks: {
-                callback: (value) => String(value),
-                font: { size: 12 },
+                stepSize: 1,
               },
             },
           },
@@ -387,6 +556,11 @@ const DashboardInvestView = ({ data }) => {
 
     if (pieChartInstance.current) pieChartInstance.current.destroy();
 
+    // Si pas de données, ne pas créer le graphique
+    if (validData.length === 0 || total === 0) {
+      return;
+    }
+
     try {
       const ctx = pieChartRef.current.getContext("2d");
       pieChartInstance.current = new Chart(ctx, {
@@ -411,9 +585,7 @@ const DashboardInvestView = ({ data }) => {
               labels: {
                 padding: 10,
                 usePointStyle: true,
-                font: {
-                  size: 11,
-                },
+                font: { size: 11 },
               },
             },
             tooltip: {
@@ -456,249 +628,256 @@ const DashboardInvestView = ({ data }) => {
     setShowDatePicker(false);
   };
 
-  const DatePicker = () => (
-    <div className="absolute top-12 right-0 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 min-w-64">
-      <div className="space-y-2">
-        <button
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md text-gray-700 font-medium"
-          onClick={() => handleTimeFilterSelect("day")}
-        >
-          Jour
-        </button>
-        <button
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md text-gray-700 font-medium"
-          onClick={() => handleTimeFilterSelect("week")}
-        >
-          Semaine
-        </button>
-        <button
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md text-gray-700 font-medium"
-          onClick={() => handleTimeFilterSelect("month")}
-        >
-          Mois
-        </button>
-        <button
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md text-gray-700 font-medium"
-          onClick={() => handleTimeFilterSelect("year")}
-        >
-          Année
-        </button>
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement des données...</p>
+          </div>
+        </div>
       </div>
-    </div>
-  );
-
-  useEffect(() => {
-    return () => {
-      if (chartInstance.current) chartInstance.current.destroy();
-      if (barChartInstance.current) barChartInstance.current.destroy();
-      if (pieChartInstance.current) pieChartInstance.current.destroy();
-    };
-  }, []);
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 bg-gray-50 min-h-screen">
       {/* En-tête */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Tableau de bord Enquêteur
+          Tableau de Bord Investigateur
         </h1>
-        <p className="text-gray-600">Vue d'ensemble de vos enquêtes en cours</p>
+        <p className="text-sm text-gray-600">
+          Vue d'ensemble de vos enquêtes en cours
+        </p>
       </div>
 
       {/* Cartes de statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-blue-500">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">
-                Dossiers assignés
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm text-gray-600 mb-1">Dossiers assignés</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {statsData.dossiersAssignes}
               </p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 text-xl">📋</span>
+            <div className="bg-blue-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-purple-500">
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">
-                Soumis à la BIANCO
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm text-gray-600 mb-1">Soumis à la BIANCO</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {statsData.soumisBianco}
               </p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-              <span className="text-purple-600 text-xl">🏛️</span>
+            <div className="bg-green-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-green-500">
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-purple-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">
-                Enquêtes complétées
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm text-gray-600 mb-1">Enquêtes complétées</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {statsData.enquetesCompletees}
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-              <span className="text-green-600 text-xl">✅</span>
+            <div className="bg-purple-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-gray-500">
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-gray-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">
-                Total dossiers
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm text-gray-600 mb-1">Total dossiers</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {statsData.totalDossiers}
               </p>
             </div>
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-              <span className="text-gray-600 text-xl">📊</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Graphique linéaire avec filtres */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-900">
-            Évolution des Signalements
-          </h2>
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <button
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 bg-white"
-                onClick={() => setShowDatePicker(!showDatePicker)}
+            <div className="bg-gray-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <svg
-                  className="w-5 h-5 text-gray-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                <span>
-                  Période:{" "}
-                  {timeFilter === "day"
-                    ? "Jour"
-                    : timeFilter === "week"
-                    ? "Semaine"
-                    : timeFilter === "month"
-                    ? "Mois"
-                    : "Année"}
-                </span>
-              </button>
-              {showDatePicker && <DatePicker />}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
             </div>
           </div>
         </div>
-        <div className="h-96">
-          <canvas ref={chartRef}></canvas>
-        </div>
       </div>
 
-      {/* Graphiques supplémentaires */}
-      <div className="space-y-6">
-        {/* Diagramme en barres agrandi */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">
-            Répartition des signalements par type et par mois -{" "}
-            {new Date().getFullYear()}
-          </h2>
-          <div className="h-96">
-            <canvas ref={barChartRef}></canvas>
+      {/* Graphiques */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Graphique linéaire */}
+        <div className="bg-white rounded-lg shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Évolution temporelle
+            </h2>
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              {timeFilter === "year" ? "Année" : timeFilter}
+            </button>
+          </div>
+          <div className="h-64">
+            <canvas ref={chartRef}></canvas>
           </div>
         </div>
 
-        {/* Diagramme circulaire en bas */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">
-            Répartition par Catégories
+        {/* Graphique circulaire */}
+        <div className="bg-white rounded-lg shadow-sm p-5">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Répartition par catégorie
           </h2>
-          <div className="h-80">
-            <canvas ref={pieChartRef}></canvas>
+          <div className="h-64">
+            {categoriesData.some((cat) => cat.total > 0) ? (
+              <canvas ref={pieChartRef}></canvas>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                Aucune donnée disponible
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Liste des dossiers assignés récemment */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Dossiers assignés récemment
-        </h3>
+      {/* Graphique en barres */}
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Analyse mensuelle détaillée
+        </h2>
+        <div className="h-80">
+          <canvas ref={barChartRef}></canvas>
+        </div>
+      </div>
+
+      {/* Tableau des dossiers récents */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Dossiers assignés récemment
+          </h2>
+        </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead>
+          <table className="w-full">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Référence
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Catégorie
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Demandeur
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {dossiersRecents.map((dossier, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {dossier.reference}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {dossier.categorie}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {dossier.date}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {dossier.demandeur}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        dossier.statut === "En cours"
-                          ? "bg-blue-100 text-blue-800"
-                          : dossier.statut === "Soumis BIANCO"
-                          ? "bg-purple-100 text-purple-800"
-                          : dossier.statut === "Complété"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {dossier.statut}
-                    </span>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {dossiersRecents.length > 0 ? (
+                dossiersRecents.map((dossier, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                      {dossier.reference}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {dossier.categorie}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {dossier.date}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {dossier.demandeur}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          dossier.statut === "En cours"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : dossier.statut === "Soumis BIANCO"
+                            ? "bg-blue-100 text-blue-800"
+                            : dossier.statut === "Complété"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {dossier.statut}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-8 text-center text-sm text-gray-500"
+                  >
+                    Aucun dossier assigné pour le moment
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
