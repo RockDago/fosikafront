@@ -1,8 +1,8 @@
 import axios from "axios";
 
-export const API_URL = "http://127.0.0.1:8000/api";
+export const API_URL = "https://fosika.mesupres.mg/api";
 
-// Création d'une instance Axios
+// --- Création de l'instance Axios ---
 const API = axios.create({
   baseURL: API_URL,
   headers: {
@@ -13,9 +13,10 @@ const API = axios.create({
   withCredentials: false,
 });
 
-// --- Gestion des tokens pour Admin ET Team ---
+// =========================================================
+// =============== INTERCEPTEUR ACCESS ADMIN ===============
+// =========================================================
 
-// Intercepteur pour bloquer les requêtes admin non autorisées
 API.interceptors.request.use(
   (config) => {
     const rawUserType =
@@ -26,118 +27,88 @@ API.interceptors.request.use(
 
     const url = config.url || "";
 
-    // Bloquer l'accès aux endpoints /admin/ si l'utilisateur n'est pas admin
-    // mais EXCLURE les endpoints d'authentification (login/logout/register/check)
-    if (
-      url.includes("/admin/") &&
-      !url.includes("/admin/check") &&
-      !url.includes("/admin/login") &&
-      !url.includes("/admin/logout") &&
-      !url.includes("/admin/register") &&
-      userType !== "admin"
-    ) {
-      console.warn(
-        "🔒 Tentative d'accès admin bloquée pour user_type=",
-        userType,
-        "url=",
-        url
-      );
+    // Bloquer l'accès aux endpoints Admin pour les non-admins
+    const isAdminEndpoint = url.includes("/admin/");
+    const isAuthEndpoint =
+      url.includes("/admin/check") ||
+      url.includes("/admin/login") ||
+      url.includes("/admin/logout") ||
+      url.includes("/admin/register");
+
+    if (isAdminEndpoint && !isAuthEndpoint && userType !== "admin") {
       return Promise.reject(new Error("Accès non autorisé à cette ressource"));
     }
 
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Récupérer le token selon le type d'utilisateur
-const getAuthToken = () => {
-  const teamToken =
-    localStorage.getItem("team_token") || sessionStorage.getItem("team_token");
-  if (teamToken) {
-    return { token: teamToken, type: "team" };
-  }
+// =========================================================
+// =============== RÉCUPÉRATION DU TOKEN ===================
+// =========================================================
 
-  const adminToken =
-    localStorage.getItem("admin_token") ||
-    sessionStorage.getItem("admin_token");
-  if (adminToken) {
-    return { token: adminToken, type: "admin" };
+const getStoredToken = (keys) => {
+  for (let key of keys) {
+    const token = localStorage.getItem(key) || sessionStorage.getItem(key);
+    if (token) return token;
   }
-
   return null;
 };
 
-// Stocker token admin
-export const setAdminAuthData = (token, rememberMe = false) => {
-  if (rememberMe) {
-    localStorage.setItem("admin_token", token);
-    localStorage.setItem("user_type", "admin");
-    localStorage.removeItem("team_token");
-    sessionStorage.removeItem("team_token");
-  } else {
-    sessionStorage.setItem("admin_token", token);
-    sessionStorage.setItem("user_type", "admin");
-    localStorage.removeItem("team_token");
-    sessionStorage.removeItem("team_token");
-  }
+// =========================================================
+// =============== STOCKAGE DES TOKENS ======================
+// =========================================================
+
+export const setAdminAuthData = (token, remember = false) => {
+  const store = remember ? localStorage : sessionStorage;
+  store.setItem("admin_token", token);
+  store.setItem("user_type", "admin");
+
+  localStorage.removeItem("team_token");
+  sessionStorage.removeItem("team_token");
 };
 
-// Stocker token team
-export const setTeamAuthData = (token, rememberMe = false) => {
-  if (rememberMe) {
-    localStorage.setItem("team_token", token);
-    localStorage.setItem("user_type", "team");
-    localStorage.removeItem("admin_token");
-    sessionStorage.removeItem("admin_token");
-  } else {
-    sessionStorage.setItem("team_token", token);
-    sessionStorage.setItem("user_type", "team");
-    localStorage.removeItem("admin_token");
-    sessionStorage.removeItem("admin_token");
-  }
+export const setTeamAuthData = (token, remember = false) => {
+  const store = remember ? localStorage : sessionStorage;
+  store.setItem("team_token", token);
+  store.setItem("user_type", "team");
+
+  localStorage.removeItem("admin_token");
+  sessionStorage.removeItem("admin_token");
 };
 
-// Supprimer tous les tokens
 export const clearAuthData = () => {
-  localStorage.removeItem("admin_token");
-  localStorage.removeItem("user_type");
-  sessionStorage.removeItem("admin_token");
-  sessionStorage.removeItem("user_type");
+  const keys = [
+    "admin_token",
+    "team_token",
+    "agent_token",
+    "investigateur_token",
+    "user_type",
+  ];
 
-  localStorage.removeItem("team_token");
-  sessionStorage.removeItem("team_token");
-
-  // Nettoyer aussi les tokens spécifiques
-  localStorage.removeItem("agent_token");
-  sessionStorage.removeItem("agent_token");
-  localStorage.removeItem("investigateur_token");
-  sessionStorage.removeItem("investigateur_token");
+  keys.forEach((key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
 };
 
-// Supprimer uniquement les tokens team
 export const clearTeamAuthData = () => {
-  localStorage.removeItem("team_token");
-  sessionStorage.removeItem("team_token");
-  localStorage.removeItem("user_type");
-  sessionStorage.removeItem("user_type");
-  localStorage.removeItem("agent_token");
-  sessionStorage.removeItem("agent_token");
-  localStorage.removeItem("investigateur_token");
-  sessionStorage.removeItem("investigateur_token");
+  ["team_token", "agent_token", "investigateur_token", "user_type"].forEach(
+    (key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
+  );
 };
 
-// Supprimer uniquement les tokens admin
 export const clearAdminAuthData = () => {
-  localStorage.removeItem("admin_token");
-  sessionStorage.removeItem("admin_token");
-  localStorage.removeItem("user_type");
-  sessionStorage.removeItem("user_type");
+  ["admin_token", "user_type"].forEach((key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
 };
 
-// Vérifier le type d'utilisateur connecté
 export const getUserType = () => {
   return (
     localStorage.getItem("user_type") ||
@@ -146,12 +117,15 @@ export const getUserType = () => {
   );
 };
 
-// --- Intercepteur pour ajouter le token Bearer ---
+// =========================================================
+// =============== INTERCEPTEUR TOKEN BEARER ===============
+// =========================================================
+
 API.interceptors.request.use(
   (config) => {
     const url = config.url || "";
 
-    // ⚠️ NE PAS ajouter de token pour les endpoints publics
+    // Endpoints publics → ne pas ajouter de token
     if (
       url.includes("/login") ||
       url.includes("/logout") ||
@@ -162,105 +136,98 @@ API.interceptors.request.use(
       return config;
     }
 
-    // Éviter les doublons d'Authorization header
+    // Éviter les doublons
     if (config.headers.Authorization) {
       return config;
     }
 
-    // Choix du token en fonction de l'endpoint cible:
-    let tokenToUse = null;
+    let token = null;
 
     if (url.includes("/admin/")) {
-      tokenToUse =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
+      token = getStoredToken(["admin_token"]);
     } else if (url.includes("/agent/")) {
-      tokenToUse =
-        localStorage.getItem("agent_token") ||
-        sessionStorage.getItem("agent_token") ||
-        localStorage.getItem("team_token") ||
-        sessionStorage.getItem("team_token");
+      token = getStoredToken([
+        "agent_token",
+        "team_token",
+        "investigateur_token",
+      ]);
     } else if (url.includes("/investigateur/")) {
-      tokenToUse =
-        localStorage.getItem("investigateur_token") ||
-        sessionStorage.getItem("investigateur_token") ||
-        localStorage.getItem("team_token") ||
-        sessionStorage.getItem("team_token");
+      token = getStoredToken([
+        "investigateur_token",
+        "team_token",
+        "agent_token",
+      ]);
     } else {
-      // fallback: team / generic token
-      tokenToUse =
-        localStorage.getItem("team_token") ||
-        sessionStorage.getItem("team_token") ||
-        localStorage.getItem("agent_token") ||
-        sessionStorage.getItem("agent_token") ||
-        localStorage.getItem("investigateur_token") ||
-        sessionStorage.getItem("investigateur_token");
+      token = getStoredToken([
+        "team_token",
+        "agent_token",
+        "investigateur_token",
+      ]);
     }
 
-    if (tokenToUse) {
-      config.headers.Authorization = `Bearer ${tokenToUse}`;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// --- Intercepteur pour gérer les erreurs ---
+// =========================================================
+// =============== INTERCEPTEUR ERREURS =====================
+// =========================================================
+
 API.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
+
   (error) => {
-    if (error.response) {
-      if (error.response.status === 401) {
-        const url = error.config?.url || "";
+    const status = error.response?.status;
+    const url = error.config?.url || "";
 
-        // Ne déclencher tokenExpired que pour les endpoints protégés, pas pour login/logout
-        if (
-          !url.includes("/login") &&
-          !url.includes("/logout") &&
-          !url.includes("/register") &&
-          !url.includes("/forgot-password")
-        ) {
-          console.warn("⚠️ Erreur 401 détectée - Token potentiellement expiré");
+    if (status === 401) {
+      const isAuth =
+        url.includes("/login") ||
+        url.includes("/logout") ||
+        url.includes("/register") ||
+        url.includes("/forgot-password");
 
-          error.message =
-            "Votre session a expiré ou vous vous êtes connecté depuis un autre appareil.";
-
-          window.dispatchEvent(
-            new CustomEvent("tokenExpired", {
-              detail: {
-                message: error.message,
-                originalData: error.response.data,
-              },
-            })
-          );
-        }
-      } else if (error.response.status === 403) {
-        if (error.response.data?.message?.includes("désactivé")) {
-          clearAuthData();
-          window.dispatchEvent(
-            new CustomEvent("accountDisabled", {
-              detail: error.response.data,
-            })
-          );
-        }
-      } else if (error.response.status === 429) {
-        // Trop de requêtes - rate limiting
-        console.warn(
-          "⚠️ Rate limiting détecté (429) - Trop de requêtes",
-          error.config?.url
-        );
+      if (!isAuth) {
         error.message =
-          "Trop de requêtes. Veuillez attendre quelques secondes avant de réessayer.";
-      } else if (error.response.status === 500) {
-        console.error("❌ Erreur serveur 500:", error.config?.url);
-        error.message = "Erreur interne du serveur. Veuillez réessayer.";
+          "Votre session a expiré ou vous vous êtes connecté depuis un autre appareil.";
+
+        window.dispatchEvent(
+          new CustomEvent("tokenExpired", {
+            detail: {
+              message: error.message,
+              originalData: error.response?.data,
+            },
+          })
+        );
       }
-    } else if (error.code === "ERR_NETWORK") {
+    }
+
+    if (status === 403) {
+      if (error.response?.data?.message?.includes("désactivé")) {
+        clearAuthData();
+        window.dispatchEvent(
+          new CustomEvent("accountDisabled", {
+            detail: error.response?.data,
+          })
+        );
+      }
+    }
+
+    if (status === 429) {
+      error.message =
+        "Trop de requêtes. Veuillez attendre quelques secondes avant de réessayer.";
+    }
+
+    if (status === 500) {
+      error.message = "Erreur interne du serveur. Veuillez réessayer.";
+    }
+
+    if (error.code === "ERR_NETWORK") {
       error.message = "Erreur de réseau. Vérifiez votre connexion internet.";
     }
 
