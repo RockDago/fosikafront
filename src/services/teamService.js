@@ -4,10 +4,23 @@ class TeamService {
   // ==================== AUTHENTIFICATION ====================
   async login(credentials) {
     try {
-      console.log('TeamService: Tentative de connexion...');
+      console.log("TeamService: Tentative de connexion...", {
+        email: credentials.email,
+      });
       const response = await instance.post("/team/login", credentials);
 
-      if (response.data.success && response.data.data?.token) {
+      // VÉRIFICATION CRITIQUE : S'assurer que la réponse est du JSON valide
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        console.error(
+          "TeamService: Le serveur retourne du HTML au lieu de JSON"
+        );
+        throw new Error("Erreur de configuration serveur - Réponse HTML reçue");
+      }
+
+      if (response.data && response.data.success && response.data.data?.token) {
         const token = response.data.data.token;
         const userData = response.data.data.user;
         const userRole = userData?.role?.toLowerCase() || "agent";
@@ -19,11 +32,11 @@ class TeamService {
 
         // Stockage cohérent avec les autres services
         const storage = credentials.remember ? localStorage : sessionStorage;
-        
+
         // Clés spécifiques au rôle
         storage.setItem(`${userRole}_token`, token);
         storage.setItem(`${userRole}_user`, JSON.stringify(userData));
-        
+
         // Clés génériques pour compatibilité
         storage.setItem("team_token", token);
         storage.setItem("team_user", JSON.stringify(userData));
@@ -31,27 +44,38 @@ class TeamService {
 
         instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-        console.log('TeamService: Données d\'auth stockées avec succès');
+        console.log("TeamService: Données d'auth stockées avec succès");
         return response.data;
       } else {
-        console.error('TeamService: Réponse de connexion invalide', response.data);
-        throw new Error("Réponse de connexion invalide");
+        console.error(
+          "TeamService: Réponse de connexion invalide",
+          response.data
+        );
+
+        // Gestion des réponses alternatives
+        if (response.data && response.data.message) {
+          throw new Error(response.data.message);
+        } else if (response.data && response.data.error) {
+          throw new Error(response.data.error);
+        } else {
+          throw new Error("Format de réponse inattendu du serveur");
+        }
       }
     } catch (error) {
-      console.error('TeamService: Erreur de connexion', error);
+      console.error("TeamService: Erreur de connexion", error);
       throw this.handleError(error);
     }
   }
 
   async logout() {
     try {
-      console.log('TeamService: Déconnexion en cours...');
+      console.log("TeamService: Déconnexion en cours...");
       const response = await instance.post("/team/logout");
       this.clearAuthTokens();
-      console.log('TeamService: Déconnexion réussie');
+      console.log("TeamService: Déconnexion réussie");
       return response.data;
     } catch (error) {
-      console.error('TeamService: Erreur lors de la déconnexion', error);
+      console.error("TeamService: Erreur lors de la déconnexion", error);
       this.clearAuthTokens();
       throw this.handleError(error);
     }
@@ -63,8 +87,17 @@ class TeamService {
       if (!userType) {
         throw new Error("Aucun type d'utilisateur détecté");
       }
-      
+
       const response = await instance.get(`/${userType}/user`);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -77,8 +110,17 @@ class TeamService {
       if (!userType) {
         return { success: false, message: "Non authentifié" };
       }
-      
+
       const response = await instance.get(`/${userType}/check-auth`);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -117,6 +159,15 @@ class TeamService {
   async getAllUsers() {
     try {
       const response = await instance.get("/team/users");
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -126,6 +177,15 @@ class TeamService {
   async getUserById(id) {
     try {
       const response = await instance.get(`/team/users/${id}`);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -154,6 +214,15 @@ class TeamService {
       if (!apiData.role_id) throw new Error("Le rôle est obligatoire");
 
       const response = await instance.post("/team/users", apiData);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       if (error.response?.status === 422) throw error.response.data;
@@ -181,6 +250,15 @@ class TeamService {
       if (!apiData.role_id) throw new Error("Le rôle est obligatoire");
 
       const response = await instance.put(`/team/users/${id}`, apiData);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       if (error.response?.status === 422) throw error.response.data;
@@ -191,6 +269,15 @@ class TeamService {
   async deleteUser(id) {
     try {
       const response = await instance.delete(`/team/users/${id}`);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -200,6 +287,15 @@ class TeamService {
   async toggleStatus(id) {
     try {
       const response = await instance.post(`/team/users/${id}/toggle-status`);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -212,6 +308,15 @@ class TeamService {
         `/team/users/${id}/reset-password`,
         passwordData
       );
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -221,6 +326,15 @@ class TeamService {
   async getStats() {
     try {
       const response = await instance.get("/team/users/stats");
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -234,8 +348,17 @@ class TeamService {
       if (!userType) {
         throw new Error("Impossible de déterminer le type d'utilisateur");
       }
-      
+
       const response = await instance.put(`/${userType}/profile`, profileData);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -248,11 +371,20 @@ class TeamService {
       if (!userType) {
         throw new Error("Impossible de déterminer le type d'utilisateur");
       }
-      
+
       const response = await instance.post(
         `/${userType}/change-password`,
         passwordData
       );
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -265,8 +397,17 @@ class TeamService {
       if (!userType) {
         throw new Error("Impossible de déterminer le type d'utilisateur");
       }
-      
+
       const response = await instance.get(`/${userType}/profile`);
+
+      // Validation de la réponse
+      if (
+        typeof response.data === "string" &&
+        response.data.includes("<!doctype html>")
+      ) {
+        throw new Error("Erreur de configuration serveur");
+      }
+
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -275,7 +416,7 @@ class TeamService {
 
   // ==================== MÉTHODES UTILITAIRES AMÉLIORÉES ====================
   clearAuthTokens() {
-    console.log('TeamService: Nettoyage des tokens...');
+    console.log("TeamService: Nettoyage des tokens...");
     const keys = [
       "team_token",
       "team_user",
@@ -287,33 +428,41 @@ class TeamService {
       "admin_token",
       "admin_user",
     ];
-    
+
     keys.forEach((key) => {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);
     });
-    
+
     delete instance.defaults.headers.common["Authorization"];
-    console.log('TeamService: Tokens nettoyés');
+    console.log("TeamService: Tokens nettoyés");
   }
 
   getAuthToken() {
     const userType = this.getUserType();
     if (userType) {
       // Priorité aux clés spécifiques au rôle
-      const token = 
+      const token =
         localStorage.getItem(`${userType}_token`) ||
         sessionStorage.getItem(`${userType}_token`) ||
         localStorage.getItem("team_token") ||
         sessionStorage.getItem("team_token");
-      
-      console.log(`TeamService: Token récupéré pour ${userType}:`, token ? 'présent' : 'manquant');
+
+      console.log(
+        `TeamService: Token récupéré pour ${userType}:`,
+        token ? "présent" : "manquant"
+      );
       return token;
     }
-    
+
     // Fallback
-    const token = localStorage.getItem("team_token") || sessionStorage.getItem("team_token");
-    console.log('TeamService: Token générique:', token ? 'présent' : 'manquant');
+    const token =
+      localStorage.getItem("team_token") ||
+      sessionStorage.getItem("team_token");
+    console.log(
+      "TeamService: Token générique:",
+      token ? "présent" : "manquant"
+    );
     return token;
   }
 
@@ -327,72 +476,103 @@ class TeamService {
         sessionStorage.getItem("team_user");
 
       const user = userData ? JSON.parse(userData) : null;
-      console.log(`TeamService: Utilisateur récupéré pour ${userType}:`, user ? 'présent' : 'manquant');
+      console.log(
+        `TeamService: Utilisateur récupéré pour ${userType}:`,
+        user ? "présent" : "manquant"
+      );
       return user;
     }
-    
-    const userData = localStorage.getItem("team_user") || sessionStorage.getItem("team_user");
+
+    const userData =
+      localStorage.getItem("team_user") || sessionStorage.getItem("team_user");
     const user = userData ? JSON.parse(userData) : null;
-    console.log('TeamService: Utilisateur générique:', user ? 'présent' : 'manquant');
+    console.log(
+      "TeamService: Utilisateur générique:",
+      user ? "présent" : "manquant"
+    );
     return user;
   }
 
   getUserType() {
-    const userType = 
+    const userType =
       localStorage.getItem("user_type") ||
       sessionStorage.getItem("user_type") ||
       // Fallback basé sur les tokens existants
-      (localStorage.getItem("agent_token") || sessionStorage.getItem("agent_token") ? "agent" : null) ||
-      (localStorage.getItem("investigateur_token") || sessionStorage.getItem("investigateur_token") ? "investigateur" : null) ||
-      (localStorage.getItem("admin_token") || sessionStorage.getItem("admin_token") ? "admin" : null);
+      (localStorage.getItem("agent_token") ||
+      sessionStorage.getItem("agent_token")
+        ? "agent"
+        : null) ||
+      (localStorage.getItem("investigateur_token") ||
+      sessionStorage.getItem("investigateur_token")
+        ? "investigateur"
+        : null) ||
+      (localStorage.getItem("admin_token") ||
+      sessionStorage.getItem("admin_token")
+        ? "admin"
+        : null);
 
-    console.log('TeamService: Type d\'utilisateur détecté:', userType);
+    console.log("TeamService: Type d'utilisateur détecté:", userType);
     return userType;
   }
 
   handleError(error) {
-    console.error('TeamService: Gestion d\'erreur', error);
-    
+    console.error("TeamService: Gestion d'erreur", error);
+
+    // Détection spécifique des réponses HTML
+    if (
+      error.response &&
+      typeof error.response.data === "string" &&
+      error.response.data.includes("<!doctype html>")
+    ) {
+      return {
+        message:
+          "Erreur de configuration serveur - Le backend retourne du HTML au lieu de JSON",
+        status: 500,
+        isNetworkError: false,
+        isServerConfigError: true,
+      };
+    }
+
     if (error.response) {
       const { status, data } = error.response;
       const url = error.config?.url || "";
-      let message = data.message || "Une erreur est survenue";
+      let message = data?.message || "Une erreur est survenue";
 
       if (status === 401) {
         message = url.includes("/login")
-          ? data.message || "Email ou mot de passe incorrect"
+          ? data?.message || "Email ou mot de passe incorrect"
           : "Session expirée. Veuillez vous reconnecter.";
-        
+
         // Déconnexion automatique pour les erreurs 401 (sauf login)
         if (!url.includes("/login")) {
-          console.log('TeamService: Déconnexion automatique suite à 401');
+          console.log("TeamService: Déconnexion automatique suite à 401");
           this.clearAuthTokens();
         }
       } else if (status === 403) {
-        message = data.message || "Accès refusé";
+        message = data?.message || "Accès refusé";
       } else if (status === 422) {
-        message = data.message || "Données invalides";
+        message = data?.message || "Données invalides";
       } else if (status === 500) {
         message = "Erreur interne du serveur. Veuillez réessayer.";
       }
 
-      return { 
-        message, 
-        status, 
+      return {
+        message,
+        status,
         data,
-        isNetworkError: false
+        isNetworkError: false,
       };
     } else if (error.request) {
       return {
         message: "Erreur de réseau - Impossible de contacter le serveur",
         status: 0,
-        isNetworkError: true
+        isNetworkError: true,
       };
     } else {
-      return { 
-        message: error.message || "Erreur inconnue", 
+      return {
+        message: error.message || "Erreur inconnue",
         status: -1,
-        isNetworkError: false
+        isNetworkError: false,
       };
     }
   }
@@ -401,60 +581,51 @@ class TeamService {
     const token = this.getAuthToken();
     const user = this.getAuthUser();
     const isAuth = !!(token && user);
-    console.log('TeamService: Authentifié:', isAuth);
+    console.log("TeamService: Authentifié:", isAuth);
     return isAuth;
   }
 
   initializeAuth() {
-    console.log('TeamService: Initialisation de l\'auth...');
+    console.log("TeamService: Initialisation de l'auth...");
     const token = this.getAuthToken();
     const userType = this.getUserType();
-    
+
     if (token && userType) {
       instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       console.log(`TeamService: Auth initialisée pour ${userType}`);
       return { token, userType, user: this.getAuthUser() };
     }
-    
-    console.log('TeamService: Aucune auth à initialiser');
+
+    console.log("TeamService: Aucune auth à initialiser");
     return null;
   }
 
-  // Nouvelle méthode pour rafraîchir le token
-  async refreshToken() {
-    try {
-      const userType = this.getUserType();
-      if (!userType) {
-        throw new Error("Impossible de rafraîchir le token: type d'utilisateur inconnu");
-      }
+  // Nouvelle méthode pour détecter les problèmes de configuration
+  checkServerConfig() {
+    console.log("TeamService: Vérification configuration serveur...");
 
-      const response = await instance.post(`/${userType}/refresh-token`);
-      
-      if (response.data.success && response.data.data?.token) {
-        const token = response.data.data.token;
-        const userData = response.data.data.user;
-        const currentUser = this.getAuthUser();
-        const rememberMe = !!localStorage.getItem(`${userType}_token`) || !!localStorage.getItem("team_token");
-        
-        // Mettre à jour le stockage
-        const storage = rememberMe ? localStorage : sessionStorage;
-        storage.setItem(`${userType}_token`, token);
-        storage.setItem("team_token", token);
-        if (userData) {
-          storage.setItem(`${userType}_user`, JSON.stringify(userData));
-          storage.setItem("team_user", JSON.stringify(userData));
-        }
-        
-        instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        
-        console.log('TeamService: Token rafraîchi avec succès');
-      }
-      
-      return response.data;
-    } catch (error) {
-      console.error('TeamService: Erreur lors du rafraîchissement du token', error);
-      throw this.handleError(error);
-    }
+    const diagnosis = {
+      apiUrl: instance.defaults.baseURL,
+      hasToken: !!this.getAuthToken(),
+      userType: this.getUserType(),
+      storageKeys: {
+        localStorage: Object.keys(localStorage).filter(
+          (key) =>
+            key.includes("token") ||
+            key.includes("user") ||
+            key.includes("type")
+        ),
+        sessionStorage: Object.keys(sessionStorage).filter(
+          (key) =>
+            key.includes("token") ||
+            key.includes("user") ||
+            key.includes("type")
+        ),
+      },
+    };
+
+    console.log("Diagnostic configuration:", diagnosis);
+    return diagnosis;
   }
 }
 

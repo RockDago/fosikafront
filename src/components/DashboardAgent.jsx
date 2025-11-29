@@ -67,7 +67,8 @@ const DashboardAgent = ({ onDeconnexion }) => {
 
       const response = await API.get("/agent/profile");
       
-      if (response.data.success) {
+      // Validation robuste de la réponse
+      if (response.data && response.data.success && response.data.data) {
         setAgentData(response.data.data);
         setData(response.data.data);
       } else {
@@ -75,7 +76,10 @@ const DashboardAgent = ({ onDeconnexion }) => {
       }
     } catch (error) {
       if (error.response?.status === 401) {
-        handleSessionExpired();
+        setError("Session expirée. Redirection...");
+        setTimeout(() => {
+          handleSessionExpired();
+        }, 2000);
       } else if (error.message?.includes("INSUFFICIENT_RESOURCES") || error.code === 'ERR_NETWORK') {
         setError("Problème de connexion. Vérifiez votre réseau.");
       } else {

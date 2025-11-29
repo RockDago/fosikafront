@@ -26,7 +26,6 @@ const DashboardAdmin = ({ onDeconnexion }) => {
 
   // Gestion de la session expirée
   const handleSessionExpired = useCallback(() => {
-    console.log("🔐 Session admin expirée");
     clearAuthData();
     if (onDeconnexion) {
       onDeconnexion();
@@ -39,23 +38,21 @@ const DashboardAdmin = ({ onDeconnexion }) => {
       setIsLoading(true);
       setError("");
 
-      console.log("🔄 Chargement des données admin...");
-
       const response = await API.get("/admin/profile");
 
-      if (response.data.success) {
+      // Validation robuste de la réponse
+      if (response.data && response.data.success && response.data.data) {
         setAdminData(response.data.data);
         setData(response.data.data);
-        console.log("✅ Données admin chargées avec succès");
       } else {
         throw new Error("Réponse invalide du serveur");
       }
     } catch (error) {
-      console.error("❌ Erreur chargement données admin:", error);
-
       if (error.response?.status === 401) {
         setError("Session expirée. Redirection...");
-        handleSessionExpired();
+        setTimeout(() => {
+          handleSessionExpired();
+        }, 2000);
       } else if (
         error.message?.includes("INSUFFICIENT_RESOURCES") ||
         error.code === "ERR_NETWORK"
@@ -83,7 +80,7 @@ const DashboardAdmin = ({ onDeconnexion }) => {
       }
     };
 
-    const interval = setInterval(checkSession, 30000); // Toutes les 30 secondes
+    const interval = setInterval(checkSession, 30000);
     return () => clearInterval(interval);
   }, [adminData, handleSessionExpired]);
 
