@@ -6,13 +6,21 @@ export const adminAPI = {
   login: async (credentials) => {
     try {
       const response = await axios.post("/admin/login", credentials);
-      // Injecter le token dans l'axios instance
+
+      // Injecter le token dans l'axios instance et stocker les données
       if (response.data.success && response.data.data?.token) {
         const token = response.data.data.token;
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        const userData = response.data.data.user;
+
+        // Utiliser les utilitaires pour stocker correctement
+        adminUtils.setAuthData(token, userData, credentials.remember || false);
+
+        return response.data;
+      } else {
+        throw new Error("Réponse de connexion invalide");
       }
-      return response.data;
     } catch (error) {
+      console.error("Erreur login admin:", error);
       throw error;
     }
   },
@@ -187,7 +195,13 @@ export const adminAPI = {
       // Mettre à jour le header après refresh
       if (response.data.success && response.data.data?.token) {
         const token = response.data.data.token;
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        const userData = response.data.data.user;
+
+        // Mettre à jour le stockage avec le nouveau token
+        const currentUser = adminUtils.getAuthUser();
+        const rememberMe = !!localStorage.getItem("admin_token"); // Vérifier si remember était activé
+
+        adminUtils.setAuthData(token, userData || currentUser, rememberMe);
       }
       return response.data;
     } catch (error) {
@@ -200,46 +214,93 @@ export const adminAPI = {
 export const adminUtils = {
   setAuthData: (token, userData, rememberMe = false) => {
     const storage = rememberMe ? localStorage : sessionStorage;
+
+    // Nettoyer d'abord les anciennes données
+    adminUtils.logout();
+
+    // Stocker les nouvelles données
     storage.setItem("admin_token", token);
     storage.setItem("admin_user", JSON.stringify(userData));
     storage.setItem("user_type", "admin");
 
+    // Injecter le token dans les headers axios
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+    console.log("Auth data stored for admin:", {
+      token: token ? "present" : "missing",
+      userData: userData ? "present" : "missing",
+      storage: rememberMe ? "localStorage" : "sessionStorage",
+    });
   },
 
   getAuthToken: () => {
-    return (
+    const token =
       localStorage.getItem("admin_token") ||
-      sessionStorage.getItem("admin_token")
-    );
+      sessionStorage.getItem("admin_token");
+    console.log("Retrieved admin token:", token ? "present" : "missing");
+    return token;
   },
 
   getAuthUser: () => {
     const userData =
       localStorage.getItem("admin_user") ||
       sessionStorage.getItem("admin_user");
-    return userData ? JSON.parse(userData) : null;
+    const user = userData ? JSON.parse(userData) : null;
+    console.log("Retrieved admin user:", user ? "present" : "missing");
+    return user;
   },
 
   isAuthenticated: () => {
     const token = adminUtils.getAuthToken();
     const user = adminUtils.getAuthUser();
-    return !!(token && user);
+    const isAuth = !!(token && user);
+    console.log("Admin authenticated:", isAuth);
+    return isAuth;
   },
 
   logout: () => {
-    const keys = ["admin_token", "admin_user", "user_type"];
+    console.log("Logging out admin...");
+
+    const keys = [
+      "admin_token",
+      "admin_user",
+      "user_type",
+      // Nettoyer aussi les clés génériques pour éviter les conflits
+      "team_token",
+      "team_user",
+    ];
+
     keys.forEach((key) => {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);
     });
+
     delete axios.defaults.headers.common["Authorization"];
+
+    console.log("Admin logout completed");
   },
 
   isAdmin: () => {
     const userType =
       localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
-    return userType === "admin";
+    const isAdmin = userType === "admin";
+    console.log("Is admin:", isAdmin);
+    return isAdmin;
+  },
+
+  // Nouvelle méthode pour initialiser l'authentification au chargement de l'app
+  initializeAuth: () => {
+    const token = adminUtils.getAuthToken();
+    const user = adminUtils.getAuthUser();
+
+    if (token && user) {
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      console.log("Auth initialized for admin");
+      return true;
+    }
+
+    console.log("No auth found for admin");
+    return false;
   },
 };
 
