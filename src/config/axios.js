@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_URL = "http://127.0.0.1:8000/api";
+export const API_URL = "https//fosika.mesupres.edu.mg/api";
 
 // --- Création de l'instance Axios ---
 const API = axios.create({
@@ -10,7 +10,7 @@ const API = axios.create({
     Accept: "application/json",
   },
   timeout: 20000,
-  withCredentials: false,
+  withCredentials: true,
 });
 
 // =========================================================
@@ -63,7 +63,7 @@ const getStoredToken = (keys) => {
       return token;
     }
   }
-  console.log('Aucun token trouvé pour les clés:', keys);
+  console.log("Aucun token trouvé pour les clés:", keys);
   return null;
 };
 
@@ -84,12 +84,12 @@ export const setAdminAuthData = (token, remember = false) => {
   localStorage.removeItem("investigateur_token");
   sessionStorage.removeItem("investigateur_token");
 
-  console.log('Admin auth data stored');
+  console.log("Admin auth data stored");
 };
 
 export const setTeamAuthData = (token, remember = false, userRole = "team") => {
   const store = remember ? localStorage : sessionStorage;
-  
+
   // Stocker les clés spécifiques au rôle
   store.setItem(`${userRole}_token`, token);
   store.setItem("team_token", token);
@@ -120,46 +120,43 @@ export const clearAuthData = () => {
     sessionStorage.removeItem(key);
   });
 
-  console.log('All auth data cleared');
+  console.log("All auth data cleared");
 };
 
 export const clearTeamAuthData = () => {
   const keys = [
-    "team_token", 
-    "agent_token", 
-    "investigateur_token", 
+    "team_token",
+    "agent_token",
+    "investigateur_token",
     "user_type",
     "team_user",
     "agent_user",
-    "investigateur_user"
+    "investigateur_user",
   ];
-  
+
   keys.forEach((key) => {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   });
 
-  console.log('Team auth data cleared');
+  console.log("Team auth data cleared");
 };
 
 export const clearAdminAuthData = () => {
-  const keys = [
-    "admin_token", 
-    "user_type",
-    "admin_user"
-  ];
-  
+  const keys = ["admin_token", "user_type", "admin_user"];
+
   keys.forEach((key) => {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   });
 
-  console.log('Admin auth data cleared');
+  console.log("Admin auth data cleared");
 };
 
 export const getUserType = () => {
-  const userType = localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
-  console.log('Current user type:', userType);
+  const userType =
+    localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
+  console.log("Current user type:", userType);
   return userType;
 };
 
@@ -180,7 +177,7 @@ API.interceptors.request.use(
       url.includes("/reset-password") ||
       url.includes("/public/")
     ) {
-      console.log('Endpoint public, pas de token ajouté');
+      console.log("Endpoint public, pas de token ajouté");
       return config;
     }
 
@@ -196,16 +193,10 @@ API.interceptors.request.use(
       token = getStoredToken(["admin_token"]);
       tokenSource = "admin";
     } else if (url.includes("/agent/")) {
-      token = getStoredToken([
-        "agent_token",
-        "team_token",
-      ]);
+      token = getStoredToken(["agent_token", "team_token"]);
       tokenSource = "agent";
     } else if (url.includes("/investigateur/")) {
-      token = getStoredToken([
-        "investigateur_token",
-        "team_token",
-      ]);
+      token = getStoredToken(["investigateur_token", "team_token"]);
       tokenSource = "investigateur";
     } else {
       // Pour les endpoints génériques, essayer tous les tokens
@@ -213,7 +204,7 @@ API.interceptors.request.use(
         "team_token",
         "agent_token",
         "investigateur_token",
-        "admin_token"
+        "admin_token",
       ]);
       tokenSource = "generic";
     }
@@ -228,7 +219,7 @@ API.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('Erreur intercepteur requête:', error);
+    console.error("Erreur intercepteur requête:", error);
     return Promise.reject(error);
   }
 );
@@ -260,26 +251,26 @@ API.interceptors.response.use(
       if (!isAuth) {
         error.message = "Votre session a expiré. Veuillez vous reconnecter.";
 
-        console.log('Déclenchement événement tokenExpired');
+        console.log("Déclenchement événement tokenExpired");
         window.dispatchEvent(
           new CustomEvent("tokenExpired", {
             detail: {
               message: error.message,
               originalData: error.response?.data,
-              url: url
+              url: url,
             },
           })
         );
-        
+
         // Nettoyer les données d'authentification
-        clearAuthData();
+        // clearAuthData();
       }
     }
 
     if (status === 403) {
       if (error.response?.data?.message?.includes("désactivé")) {
         clearAuthData();
-        console.log('Déclenchement événement accountDisabled');
+        console.log("Déclenchement événement accountDisabled");
         window.dispatchEvent(
           new CustomEvent("accountDisabled", {
             detail: error.response?.data,
@@ -293,11 +284,13 @@ API.interceptors.response.use(
     }
 
     if (status === 422) {
-      error.message = "Données invalides. Veuillez vérifier les informations saisies.";
+      error.message =
+        "Données invalides. Veuillez vérifier les informations saisies.";
     }
 
     if (status === 429) {
-      error.message = "Trop de requêtes. Veuillez attendre quelques secondes avant de réessayer.";
+      error.message =
+        "Trop de requêtes. Veuillez attendre quelques secondes avant de réessayer.";
     }
 
     if (status === 500) {
@@ -306,7 +299,7 @@ API.interceptors.response.use(
 
     if (error.code === "ERR_NETWORK") {
       error.message = "Erreur de réseau. Vérifiez votre connexion internet.";
-      
+
       window.dispatchEvent(
         new CustomEvent("networkError", {
           detail: {
@@ -332,9 +325,9 @@ export const initializeAuth = () => {
   const userType = getUserType();
   const token = getStoredToken([
     "admin_token",
-    "team_token", 
+    "team_token",
     "agent_token",
-    "investigateur_token"
+    "investigateur_token",
   ]);
 
   if (token && userType) {
@@ -343,7 +336,7 @@ export const initializeAuth = () => {
     return { userType, token };
   }
 
-  console.log('Aucune auth à initialiser');
+  console.log("Aucune auth à initialiser");
   return null;
 };
 
