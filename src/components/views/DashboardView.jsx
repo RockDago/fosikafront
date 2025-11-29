@@ -88,6 +88,7 @@ export default function DashboardView() {
   });
   const [monthTotal, setMonthTotal] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     initializeCategoriesWithZero();
@@ -120,8 +121,20 @@ export default function DashboardView() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError("");
 
       const response = await API.get("/reports?per_page=1000");
+
+      // Validation robuste de la réponse
+      if (!response.data) {
+        throw new Error("Aucune donnée reçue du serveur");
+      }
+
+      if (!response.data.success) {
+        throw new Error(
+          response.data.message || "Erreur de chargement des données"
+        );
+      }
 
       const allReportsData = Array.isArray(response.data.data)
         ? response.data.data
@@ -133,7 +146,6 @@ export default function DashboardView() {
         updateRecentReportsWithRealData(allReportsData);
         calculateMonthTotal();
       } else {
-        console.log("Aucun signalement à afficher.");
         setCategories(
           defaultCategoryStructure.map((cat) => ({
             ...cat,
@@ -154,6 +166,19 @@ export default function DashboardView() {
       }
     } catch (error) {
       console.error("Erreur lors du chargement des données:", error);
+
+      let errorMessage = "Erreur lors du chargement des données";
+      if (error.response?.status === 401) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "Accès non autorisé";
+      } else if (error.code === "ERR_NETWORK") {
+        errorMessage = "Problème de connexion. Vérifiez votre réseau.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -779,6 +804,38 @@ export default function DashboardView() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Chargement des données...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="bg-red-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <svg
+              className="w-8 h-8 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Erreur</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Réessayer
+          </button>
         </div>
       </div>
     );
