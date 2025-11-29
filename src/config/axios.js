@@ -109,6 +109,12 @@ export const clearAuthData = () => {
 
   localStorage.removeItem("team_token");
   sessionStorage.removeItem("team_token");
+
+  // Nettoyer aussi les tokens spécifiques
+  localStorage.removeItem("agent_token");
+  sessionStorage.removeItem("agent_token");
+  localStorage.removeItem("investigateur_token");
+  sessionStorage.removeItem("investigateur_token");
 };
 
 // Supprimer uniquement les tokens team
@@ -117,6 +123,10 @@ export const clearTeamAuthData = () => {
   sessionStorage.removeItem("team_token");
   localStorage.removeItem("user_type");
   sessionStorage.removeItem("user_type");
+  localStorage.removeItem("agent_token");
+  sessionStorage.removeItem("agent_token");
+  localStorage.removeItem("investigateur_token");
+  sessionStorage.removeItem("investigateur_token");
 };
 
 // Supprimer uniquement les tokens admin
@@ -152,45 +162,43 @@ API.interceptors.request.use(
       return config;
     }
 
+    // Éviter les doublons d'Authorization header
+    if (config.headers.Authorization) {
+      return config;
+    }
+
     // Choix du token en fonction de l'endpoint cible:
-    // - Si on appelle /admin/*, préférer le token admin
-    // - Sinon, utiliser le token team/générique
     let tokenToUse = null;
+
     if (url.includes("/admin/")) {
       tokenToUse =
         localStorage.getItem("admin_token") ||
         sessionStorage.getItem("admin_token");
-      if (tokenToUse) {
-        config.headers.Authorization = `Bearer ${tokenToUse}`;
-        console.log(
-          "✅ Token admin trouvé et ajouté:",
-          tokenToUse.substring(0, 20) + "..."
-        );
-      }
-    }
-
-    if (!tokenToUse) {
-      // fallback: team / generic token
-      const teamToken =
+    } else if (url.includes("/agent/")) {
+      tokenToUse =
+        localStorage.getItem("agent_token") ||
+        sessionStorage.getItem("agent_token") ||
         localStorage.getItem("team_token") ||
         sessionStorage.getItem("team_token");
-      const agentToken =
+    } else if (url.includes("/investigateur/")) {
+      tokenToUse =
+        localStorage.getItem("investigateur_token") ||
+        sessionStorage.getItem("investigateur_token") ||
+        localStorage.getItem("team_token") ||
+        sessionStorage.getItem("team_token");
+    } else {
+      // fallback: team / generic token
+      tokenToUse =
+        localStorage.getItem("team_token") ||
+        sessionStorage.getItem("team_token") ||
         localStorage.getItem("agent_token") ||
-        sessionStorage.getItem("agent_token");
-      const investigateurToken =
+        sessionStorage.getItem("agent_token") ||
         localStorage.getItem("investigateur_token") ||
         sessionStorage.getItem("investigateur_token");
+    }
 
-      tokenToUse = agentToken || investigateurToken || teamToken;
-      if (tokenToUse) {
-        config.headers.Authorization = `Bearer ${tokenToUse}`;
-        console.log(
-          "✅ Token trouvé et ajouté:",
-          tokenToUse.substring(0, 20) + "..."
-        );
-      } else {
-        console.warn("⚠️ Aucun token trouvé pour la requête:", config.url);
-      }
+    if (tokenToUse) {
+      config.headers.Authorization = `Bearer ${tokenToUse}`;
     }
 
     return config;
@@ -230,14 +238,6 @@ API.interceptors.response.use(
               },
             })
           );
-        } else {
-          console.warn("⚠️ Erreur 401 sur endpoint d'authentification", url);
-          // Afficher le détail renvoyé par le serveur pour aider au débogage
-          try {
-            console.error("Détail 401 :", error.response.data);
-          } catch (e) {
-            console.error("Détail 401 non disponible", e);
-          }
         }
       } else if (error.response.status === 403) {
         if (error.response.data?.message?.includes("désactivé")) {
@@ -256,7 +256,12 @@ API.interceptors.response.use(
         );
         error.message =
           "Trop de requêtes. Veuillez attendre quelques secondes avant de réessayer.";
+      } else if (error.response.status === 500) {
+        console.error("❌ Erreur serveur 500:", error.config?.url);
+        error.message = "Erreur interne du serveur. Veuillez réessayer.";
       }
+    } else if (error.code === "ERR_NETWORK") {
+      error.message = "Erreur de réseau. Vérifiez votre connexion internet.";
     }
 
     return Promise.reject(error);

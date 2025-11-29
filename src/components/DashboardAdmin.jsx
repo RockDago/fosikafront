@@ -7,87 +7,89 @@ import IndicateursView from "./views/IndicateursView";
 import NotificationsView from "./views/NotificationsView";
 import JournalView from "./views/JournalView";
 import AdminProfile from "./AdminProfile";
-import axios, { clearAuthData } from "../config/axios"; // ✅ Import d'Axios configuré
+import API, { clearAuthData } from "../config/axios";
 
 // Import des nouvelles vues
 import AnalyseView from "./views/AnalyseView";
-
 import EquipeView from "./views/EquipeView";
 
-const PlaceholderView = ({ viewName }) => (
-  <div className="space-y-6">
-    <div className="mb-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2 capitalize">
-        {viewName}
-      </h1>
-      <p className="text-gray-600">Vue en cours de développement</p>
-    </div>
-    <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
-      <p className="text-gray-500">
-        Cette fonctionnalité sera disponible prochainement
-      </p>
-    </div>
-  </div>
-);
-
 const DashboardAdmin = ({ onDeconnexion }) => {
-  // États pour remplacer useAppData
   const [data, setData] = useState(null);
   const [currentView, setCurrentView] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
   const [adminData, setAdminData] = useState(null);
   const [avatarUpdated, setAvatarUpdated] = useState(0);
-  const [headerAvatarUpdate, setHeaderAvatarUpdate] = useState(0);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSignalement, setSelectedSignalement] = useState(null);
-  const [sessionCheckInterval, setSessionCheckInterval] = useState(null);
-  const [sessionCheckFailures, setSessionCheckFailures] = useState(0);
+
+  // Gestion de la session expirée
+  const handleSessionExpired = useCallback(() => {
+    console.log("🔐 Session admin expirée");
+    clearAuthData();
+    if (onDeconnexion) {
+      onDeconnexion();
+    }
+  }, [onDeconnexion]);
+
+  // Charger les données de l'admin
+  const fetchAdminData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      console.log("🔄 Chargement des données admin...");
+
+      const response = await API.get("/admin/profile");
+
+      if (response.data.success) {
+        setAdminData(response.data.data);
+        setData(response.data.data);
+        console.log("✅ Données admin chargées avec succès");
+      } else {
+        throw new Error("Réponse invalide du serveur");
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement données admin:", error);
+
+      if (error.response?.status === 401) {
+        setError("Session expirée. Redirection...");
+        handleSessionExpired();
+      } else if (
+        error.message?.includes("INSUFFICIENT_RESOURCES") ||
+        error.code === "ERR_NETWORK"
+      ) {
+        setError("Problème de connexion. Vérifiez votre réseau.");
+      } else {
+        setError("Erreur lors du chargement des données.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [handleSessionExpired]);
 
   // Vérifier périodiquement la validité de la session
   useEffect(() => {
+    if (!adminData) return;
+
     const checkSession = async () => {
       try {
-        await axios.get("/admin/check");
-        // Réinitialiser le compteur d'erreurs en cas de succès
-        setSessionCheckFailures(0);
+        await API.get("/admin/check");
       } catch (error) {
         if (error.response?.status === 401) {
           handleSessionExpired();
-          // Arrêter les vérifications après déconnexion
-          if (sessionCheckInterval) clearInterval(sessionCheckInterval);
-        } else if (error.response?.status === 429) {
-          // Rate limiting - augmenter le délai entre les vérifications
-          console.warn(
-            "⚠️ Rate limit détecté lors de la vérification de session"
-          );
-          setSessionCheckFailures((prev) => prev + 1);
-          // Arrêter les vérifications temporairement en cas de rate limit
-          if (sessionCheckInterval) {
-            clearInterval(sessionCheckInterval);
-            // Réessayer après 60 secondes
-            const timeoutId = setTimeout(() => {
-              const newInterval = setInterval(checkSession, 30000);
-              setSessionCheckInterval(newInterval);
-            }, 60000);
-            setSessionCheckInterval(timeoutId);
-          }
         }
       }
     };
 
-    const interval = setInterval(checkSession, 30000);
-    setSessionCheckInterval(interval);
+    const interval = setInterval(checkSession, 30000); // Toutes les 30 secondes
+    return () => clearInterval(interval);
+  }, [adminData, handleSessionExpired]);
 
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [onDeconnexion, sessionCheckInterval]);
-
-  // Écouter les événements de déconnexion depuis d'autres onglets
+  // Écouter les événements de déconnexion
   useEffect(() => {
-    const handleSessionInvalidated = () => {
+    const handleTokenExpired = () => {
       handleSessionExpired();
     };
 
@@ -97,67 +99,26 @@ const DashboardAdmin = ({ onDeconnexion }) => {
       }
     };
 
-    window.addEventListener("sessionInvalidated", handleSessionInvalidated);
+    window.addEventListener("tokenExpired", handleTokenExpired);
     window.addEventListener("storage", handleStorageChange);
 
     return () => {
-      window.removeEventListener(
-        "sessionInvalidated",
-        handleSessionInvalidated
-      );
+      window.removeEventListener("tokenExpired", handleTokenExpired);
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, []);
-
-  const handleSessionExpired = useCallback(() => {
-    if (sessionCheckInterval) {
-      clearInterval(sessionCheckInterval);
-    }
-    alert(
-      "Votre session a expiré ou vous vous êtes connecté depuis un autre appareil. Vous allez être redirigé vers la page de connexion."
-    );
-    clearAuthData(); // Utilise la fonction importée
-    onDeconnexion();
-  }, [sessionCheckInterval, onDeconnexion]);
-
-  // Charger les données de l'admin
-  const fetchAdminData = useCallback(async () => {
-    try {
-      const token =
-        localStorage.getItem("admin_token") ||
-        sessionStorage.getItem("admin_token");
-      if (!token) return;
-
-      // ✅ UTILISATION D'AXIOS AU LIEU DE FETCH
-      const response = await axios.get("/admin/profile");
-
-      if (response.data.success) {
-        setAdminData(response.data.data);
-        setData(response.data.data); // mettre aussi dans "data"
-      }
-    } catch (error) {
-      if (error.response?.status === 401) {
-        handleSessionExpired();
-      }
-    }
   }, [handleSessionExpired]);
 
+  // Chargement initial
   useEffect(() => {
-    fetchAdminData();
-  }, [avatarUpdated, fetchAdminData]);
+    const timer = setTimeout(() => {
+      fetchAdminData();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [fetchAdminData]);
 
   const handleAvatarUpdate = () => {
     setAvatarUpdated((prev) => prev + 1);
-    setHeaderAvatarUpdate((prev) => prev + 1);
-  };
-
-  const handleHeaderAvatarUpdate = () => {
-    setHeaderAvatarUpdate((prev) => prev + 1);
-    fetchAdminData();
-  };
-
-  const handleHideToggle = () => {
-    setSidebarHidden(!sidebarHidden);
   };
 
   const handleNavigateToAnalyse = (category) => {
@@ -170,7 +131,33 @@ const DashboardAdmin = ({ onDeconnexion }) => {
     setCurrentView("reports");
   };
 
+  const handleNavigateToProfile = () => setCurrentView("profil");
+  const handleNavigateToNotifications = () => setCurrentView("notifications");
+
   const renderView = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      );
+    }
+
+    if (error && !adminData) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <div className="text-red-600 text-lg mb-2">Erreur</div>
+          <p className="text-gray-700 mb-4">{error}</p>
+          <button
+            onClick={fetchAdminData}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Réessayer
+          </button>
+        </div>
+      );
+    }
+
     const displayData = data || {};
 
     switch (currentView) {
@@ -208,7 +195,6 @@ const DashboardAdmin = ({ onDeconnexion }) => {
         return (
           <AnalyseView data={displayData} selectedCategory={selectedCategory} />
         );
-
       case "equipe":
         return <EquipeView data={displayData} />;
       default:
@@ -216,18 +202,14 @@ const DashboardAdmin = ({ onDeconnexion }) => {
     }
   };
 
-  const handleNavigateToProfile = () => setCurrentView("profil");
-  const handleNavigateToNotifications = () => setCurrentView("notifications");
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header
-        notifications={data?.notifications || []}
         onNavigateToNotifications={handleNavigateToNotifications}
         onNavigateToProfile={handleNavigateToProfile}
         onDeconnexion={onDeconnexion}
         adminData={adminData}
-        onAvatarUpdate={headerAvatarUpdate}
+        onAvatarUpdate={handleAvatarUpdate}
       />
 
       <div className="flex pt-20">
@@ -236,13 +218,11 @@ const DashboardAdmin = ({ onDeconnexion }) => {
           onViewChange={setCurrentView}
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-          isHidden={sidebarHidden}
-          onHideToggle={handleHideToggle}
         />
 
         <main
           className={`flex-1 transition-all duration-300 ${
-            sidebarHidden ? "ml-0" : sidebarCollapsed ? "ml-20" : "ml-64"
+            sidebarCollapsed ? "ml-20" : "ml-64"
           }`}
         >
           <div className="p-6">{renderView()}</div>

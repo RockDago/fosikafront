@@ -1,963 +1,867 @@
-// NotificationsInvestView.jsx
-import React, { useState, useEffect } from "react";
-import {
-  Bell,
-  RefreshCw,
-  Trash2,
-  Check,
-  FileText,
-  AlertTriangle,
-  Shield,
-  AlertCircle,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Mail,
-  MailOpen,
-  Download,
-  Eye,
-  File,
-  Search,
-  Filter,
-} from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import Chart from "chart.js/auto";
 import API from "../../config/axios";
-import HeaderTeam from "../components/HeaderTeam";
 
-const NotificationsInvestView = ({ onLogout, userData, userRole = "investigateur" }) => {
-  const [notifications, setNotifications] = useState([]);
+// Palette de couleurs pour les graphiques
+const chartColors = [
+  { border: "#2B6CB0", background: "rgba(43,108,176,0.08)" },
+  { border: "#6B7280", background: "rgba(107,114,128,0.08)" },
+  { border: "#16A34A", background: "rgba(22,163,74,0.08)" },
+  { border: "#D97706", background: "rgba(217,119,6,0.06)" },
+  { border: "#44403C", background: "rgba(68,64,60,0.06)" },
+  { border: "#475569", background: "rgba(71,85,105,0.06)" },
+];
+
+const pieColors = [
+  "#2B6CB0",
+  "#6B7280",
+  "#16A34A",
+  "#D97706",
+  "#475569",
+  "#94A3B8",
+];
+
+const DashboardInvestView = ({ data }) => {
+  const chartRef = useRef(null);
+  const barChartRef = useRef(null);
+  const pieChartRef = useRef(null);
+  const chartInstance = useRef(null);
+  const barChartInstance = useRef(null);
+  const pieChartInstance = useRef(null);
+
+  const [timeFilter, setTimeFilter] = useState("year");
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedNotification, setSelectedNotification] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
-  const [filter, setFilter] = useState("all");
-  const [viewMode, setViewMode] = useState("list");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [navigationData, setNavigationData] = useState(null);
 
-  // États pour le header
-  const [headerUserData, setHeaderUserData] = useState(userData);
+  // États pour les données réelles
+  const [statsData, setStatsData] = useState({
+    dossiersAssignes: 0,
+    enCours: 0,
+    soumisBianco: 0,
+    enquetesCompletees: 0,
+    totalDossiers: 0,
+  });
 
+  const [categoriesData, setCategoriesData] = useState([]);
+  const [dossiersRecents, setDossiersRecents] = useState([]);
+  const [allReports, setAllReports] = useState([]);
+
+  // Charger les données réelles depuis l'API
   useEffect(() => {
-    fetchAllNotifications();
+    fetchAssignedReports();
   }, []);
 
-  const fetchAllNotifications = async () => {
+  const fetchAssignedReports = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem(`${userRole}_token`) || sessionStorage.getItem(`${userRole}_token`);
-      
-      if (!token) {
-        return;
-      }
+      console.log("🔄 Tentative de récupération des données réelles...");
 
-      const response = await API.get("/notifications/investigator", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // OPTION 1: Essayer d'abord l'endpoint assigné
+      try {
+        const response = await API.get("/reports/assigned");
+        console.log("✅ Données réelles chargées:", response.data);
 
-      if (response.status === 200) {
         if (response.data.success) {
-          setNotifications(response.data.data || []);
+          processApiResponse(response.data);
+          return;
         }
+      } catch (assignError) {
+        console.log(
+          "❌ Endpoint /assigned non disponible, tentative avec /reports"
+        );
       }
+
+      // OPTION 2: Récupérer tous les rapports
+      try {
+        const response = await API.get("/reports");
+        console.log("✅ Tous les rapports chargés:", response.data);
+
+        if (response.data.success) {
+          const allReports = response.data.data || [];
+          processApiResponse({
+            success: true,
+            data: allReports,
+            stats: {
+              dossiersAssignes: allReports.length,
+              totalDossiers: allReports.length,
+            },
+          });
+          return;
+        }
+      } catch (reportsError) {
+        console.error("❌ Erreur avec l'endpoint /reports:", reportsError);
+      }
+
+      // Si les deux endpoints échouent
+      throw new Error("Impossible de charger les données depuis l'API");
     } catch (error) {
+      console.error("❌ Erreur finale:", error);
+      // En cas d'erreur, initialiser avec des données vides
+      setAllReports([]);
+      setDossiersRecents([]);
+      setCategoriesData(getDefaultCategories());
+      setStatsData({
+        dossiersAssignes: 0,
+        enCours: 0,
+        soumisBianco: 0,
+        enquetesCompletees: 0,
+        totalDossiers: 0,
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const markAsRead = async (notificationId) => {
-    try {
-      const token = localStorage.getItem(`${userRole}_token`) || sessionStorage.getItem(`${userRole}_token`);
-      
-      const response = await API.post(`/notifications/${notificationId}/read`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  // Fonction pour traiter la réponse API
+  const processApiResponse = (apiData) => {
+    if (apiData.success) {
+      const reports = apiData.data || [];
+      const stats = apiData.stats || {};
 
-      if (response.status === 200) {
-        setNotifications((prev) =>
-          prev.map((notif) =>
-            notif.id === notificationId ? { ...notif, status: "read" } : notif
-          )
-        );
-        if (selectedNotification?.id === notificationId) {
-          setSelectedNotification((prev) => ({ ...prev, status: "read" }));
-        }
-      }
-    } catch (error) {
+      setAllReports(reports);
+
+      // Calculer les statistiques depuis les données réelles
+      const calculatedStats = {
+        dossiersAssignes: stats.dossiersAssignes || reports.length,
+        enCours: reports.filter((r) => r.status === "en_cours").length,
+        soumisBianco: reports.filter((r) => r.status === "finalise").length,
+        enquetesCompletees: reports.filter((r) => r.status === "classifier")
+          .length,
+        totalDossiers: stats.totalDossiers || reports.length,
+      };
+
+      setStatsData(calculatedStats);
+
+      // Formater les dossiers récents
+      const formattedReports = reports.slice(0, 6).map((report) => ({
+        reference: report.reference || `REF-${report.id}`,
+        categorie:
+          getCategoryIcon(report.category) +
+          " " +
+          getCategoryName(report.category),
+        date: new Date(report.created_at || report.date).toLocaleDateString(
+          "fr-FR"
+        ),
+        demandeur: report.name || report.demandeur || "Anonyme",
+        statut: getStatusLabel(report.status),
+      }));
+
+      setDossiersRecents(formattedReports);
+      updateCategoriesData(reports);
     }
   };
 
-  const markAllAsRead = async () => {
-    try {
-      const token = localStorage.getItem(`${userRole}_token`) || sessionStorage.getItem(`${userRole}_token`);
-      
-      const response = await API.post("/notifications/read-all", {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.status === 200) {
-        setNotifications((prev) =>
-          prev.map((notif) => ({
-            ...notif,
-            status: "read",
-          }))
-        );
-      }
-    } catch (error) {
-    }
+  // Fonction pour les catégories par défaut
+  const getDefaultCategories = () => {
+    return [
+      { id: "faux-diplomes", name: "Faux Diplômes", total: 0, icon: "📜" },
+      {
+        id: "offre-formation-irreguliere",
+        name: "Offre de formation irrégulière (non habilité)",
+        total: 0,
+        icon: "🎓",
+      },
+      {
+        id: "recrutements-irreguliers",
+        name: "Recrutements Irréguliers",
+        total: 0,
+        icon: "💼",
+      },
+      { id: "harcelement", name: "Harcèlement", total: 0, icon: "⚠️" },
+      { id: "corruption", name: "Corruption", total: 0, icon: "🔴" },
+      { id: "divers", name: "Divers", total: 0, icon: "🏷️" },
+    ];
   };
 
-  const deleteNotification = async (notificationId) => {
-    try {
-      const token = localStorage.getItem(`${userRole}_token`) || sessionStorage.getItem(`${userRole}_token`);
-      
-      const response = await API.delete(`/notifications/${notificationId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  // Fonction pour mettre à jour les catégories
+  const updateCategoriesData = (reports) => {
+    const defaultCategories = getDefaultCategories();
 
-      if (response.status === 200) {
-        setNotifications((prev) =>
-          prev.filter((notif) => notif.id !== notificationId)
-        );
-        if (selectedNotification?.id === notificationId) {
-          setSelectedNotification(null);
-          setViewMode("list");
-        }
-      }
-    } catch (error) {
-    }
+    // Calculer depuis les rapports réels
+    defaultCategories.forEach((cat) => {
+      const count = reports.filter(
+        (report) => getCategoryName(report.category) === cat.name
+      ).length;
+      cat.total = count;
+    });
+
+    setCategoriesData(defaultCategories);
   };
 
-  const confirmDelete = (notificationId, notificationTitle) => {
-    const modal = document.createElement("div");
-    modal.className =
-      "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4";
-    modal.innerHTML = `
-      <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 mx-4">
-        <div class="flex items-center gap-4 mb-4">
-          <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900">Supprimer la notification</h3>
-            <p class="text-gray-600 text-sm mt-1">Cette action est irréversible</p>
-          </div>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-4 mb-6">
-          <p class="text-gray-700 text-sm">
-            Êtes-vous sûr de vouloir supprimer définitivement la notification 
-            <strong class="text-gray-900 block mt-1">"${notificationTitle}"</strong> ?
-          </p>
-        </div>
-        <div class="flex gap-3 justify-end">
-          <button id="cancel-btn" class="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm">
-            Annuler
-          </button>
-          <button id="confirm-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm">
-            Supprimer
-          </button>
-        </div>
-      </div>
-    `;
-
-    const cancelBtn = modal.querySelector("#cancel-btn");
-    const confirmBtn = modal.querySelector("#confirm-btn");
-
-    cancelBtn.onclick = () => document.body.removeChild(modal);
-    confirmBtn.onclick = () => {
-      deleteNotification(notificationId);
-      document.body.removeChild(modal);
+  const getCategoryIcon = (category) => {
+    const icons = {
+      "faux-diplomes": "📜",
+      "Faux Diplômes": "📜",
+      "Offre de formation irrégulière ( non habilité)": "🎓",
+      "offre-formation-irreguliere": "🎓",
+      "recrutements-irreguliers": "💼",
+      "Recrutements Irréguliers": "💼",
+      harcelement: "⚠️",
+      Harcèlement: "⚠️",
+      corruption: "🔴",
+      Corruption: "🔴",
+      divers: "🏷️",
+      Divers: "🏷️",
     };
-
-    document.body.appendChild(modal);
+    return icons[category] || "📋";
   };
 
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case "nouveau_signalement":
-        return <FileText className="w-4 h-4 text-blue-600" />;
-      case "doublon_detecte":
-        return <AlertTriangle className="w-4 h-4 text-orange-600" />;
-      case "signalement_urgent":
-        return <Shield className="w-4 h-4 text-red-600" />;
-      case "statut_modifie":
-        return <RefreshCw className="w-4 h-4 text-green-600" />;
-      case "enquete_assignee":
-        return <AlertCircle className="w-4 h-4 text-purple-600" />;
-      case "enquete_terminee":
-        return <Check className="w-4 h-4 text-green-600" />;
-      default:
-        return <Bell className="w-4 h-4 text-gray-600" />;
-    }
+  const getCategoryName = (category) => {
+    const names = {
+      "faux-diplomes": "Faux Diplômes",
+      "offre-formation-irreguliere":
+        "Offre de formation irrégulière (non habilité)",
+      "Offre de formation irrégulière ( non habilité)":
+        "Offre de formation irrégulière (non habilité)",
+      "recrutements-irreguliers": "Recrutements Irréguliers",
+      harcelement: "Harcèlement",
+      corruption: "Corruption",
+      divers: "Divers",
+    };
+    return names[category] || category;
   };
 
-  const getTypeText = (type) => {
-    switch (type) {
-      case "nouveau_signalement":
-        return "Nouveau dossier assigné";
-      case "doublon_detecte":
-        return "Doublon détecté";
-      case "signalement_urgent":
-        return "Signalement urgent";
-      case "statut_modifie":
-        return "Statut modifié";
-      case "enquete_assignee":
-        return "Enquête assignée";
-      case "enquete_terminee":
-        return "Enquête terminée";
-      default:
-        return "Notification système";
-    }
+  const getStatusLabel = (status) => {
+    const labels = {
+      en_cours: "En cours",
+      finalise: "Soumis BIANCO",
+      classifier: "Complété",
+      doublon: "Doublon",
+      refuse: "Refusé",
+    };
+    return labels[status] || status;
   };
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return "";
-    try {
-      const date = new Date(timestamp);
-      const now = new Date();
-      const diffMs = now - date;
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
+  // Calculer les données par mois à partir des vrais rapports
+  const calculateMonthlyData = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    start.setMonth(start.getMonth() - 11);
 
-      if (diffMins < 1) return "À l'instant";
-      if (diffMins < 60) return `Il y a ${diffMins} min`;
-      if (diffHours < 24) return `Il y a ${diffHours} h`;
-      if (diffDays === 1) return "Hier";
-      if (diffDays < 7) return `Il y a ${diffDays} j`;
+    const months = Array.from({ length: 12 }, (_, i) => {
+      return new Date(start.getFullYear(), start.getMonth() + i, 1);
+    });
 
-      return date.toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "short",
+    // Initialiser les compteurs par catégorie et par mois
+    const dataByCategory = {};
+    categoriesData.forEach((cat) => {
+      dataByCategory[cat.name] = new Array(12).fill(0);
+    });
+
+    // Compter les rapports réels par mois et par catégorie
+    allReports.forEach((report) => {
+      const reportDate = new Date(report.created_at);
+      const monthIndex = months.findIndex((month) => {
+        return (
+          reportDate.getFullYear() === month.getFullYear() &&
+          reportDate.getMonth() === month.getMonth()
+        );
       });
-    } catch (e) {
-      return timestamp;
-    }
+
+      if (monthIndex !== -1) {
+        const categoryName = getCategoryName(report.category);
+        if (dataByCategory[categoryName]) {
+          dataByCategory[categoryName][monthIndex]++;
+        }
+      }
+    });
+
+    return { months, dataByCategory };
   };
 
-  const formatDetailedTime = (timestamp) => {
-    if (!timestamp) return "";
+  // Générer des données temporelles basées sur les VRAIES données
+  const generateTimeBasedData = () => {
+    const monthsShort = [
+      "Jan",
+      "Fév",
+      "Mar",
+      "Avr",
+      "Mai",
+      "Juin",
+      "Juil",
+      "Août",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Déc",
+    ];
+
+    const { months, dataByCategory } = calculateMonthlyData();
+
+    const labels = months.map(
+      (m) => monthsShort[m.getMonth()] + ` ${m.getFullYear()}`
+    );
+
+    const datasets = categoriesData.map((category, index) => {
+      return {
+        label: category.name,
+        data: dataByCategory[category.name] || new Array(12).fill(0),
+        borderColor: chartColors[index % chartColors.length].border,
+        backgroundColor: chartColors[index % chartColors.length].background,
+        tension: 0.4,
+        fill: false,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2,
+      };
+    });
+
+    return { labels, datasets };
+  };
+
+  // Données RÉELLES pour le diagramme en barres par mois
+  const getReportsByMonthAndCategory = () => {
+    const monthsShort = [
+      "Jan",
+      "Fév",
+      "Mar",
+      "Avr",
+      "Mai",
+      "Juin",
+      "Juil",
+      "Août",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Déc",
+    ];
+
+    const { months, dataByCategory } = calculateMonthlyData();
+
+    const labels = months.map(
+      (m) => `${monthsShort[m.getMonth()]} ${m.getFullYear()}`
+    );
+
+    const datasets = categoriesData.map((category, index) => {
+      return {
+        label: category.name,
+        data: dataByCategory[category.name] || new Array(12).fill(0),
+        backgroundColor: chartColors[index % chartColors.length].background,
+        borderColor: chartColors[index % chartColors.length].border,
+        borderWidth: 1,
+      };
+    });
+
+    return { labels, datasets };
+  };
+
+  // Initialiser les graphiques
+  useEffect(() => {
+    if (!isLoading && categoriesData.length > 0 && allReports.length >= 0) {
+      initializeChart();
+      initializeBarChart();
+      initializePieChart();
+    }
+
+    return () => {
+      if (chartInstance.current) chartInstance.current.destroy();
+      if (barChartInstance.current) barChartInstance.current.destroy();
+      if (pieChartInstance.current) pieChartInstance.current.destroy();
+    };
+  }, [timeFilter, categoriesData, isLoading, allReports]);
+
+  const initializeChart = () => {
+    if (!chartRef.current) return;
+
+    const { labels, datasets } = generateTimeBasedData();
+
+    if (chartInstance.current) chartInstance.current.destroy();
+
     try {
-      const date = new Date(timestamp);
-      return date.toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+      const ctx = chartRef.current.getContext("2d");
+      chartInstance.current = new Chart(ctx, {
+        type: "line",
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: "bottom",
+              labels: {
+                usePointStyle: true,
+                padding: 12,
+                font: { size: 12 },
+                color: "#455160",
+              },
+            },
+            tooltip: {
+              backgroundColor: "#fff",
+              titleColor: "#383e45",
+              bodyColor: "#22282c",
+              borderColor: "#ddd",
+              borderWidth: 1,
+              padding: 12,
+              displayColors: true,
+              titleFont: { size: 12 },
+              bodyFont: { size: 12 },
+              callbacks: {
+                label: (context) =>
+                  `${context.dataset.label}: ${context.parsed.y} signalement(s)`,
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                font: { size: 12 },
+                stepSize: 1,
+              },
+              grid: { color: "rgba(120,130,140,0.06)" },
+              title: {
+                display: true,
+                text: "Nombre de signalements",
+                font: { size: 13, weight: "500" },
+              },
+            },
+            x: {
+              ticks: { font: { size: 12 } },
+              grid: { display: false },
+              title: {
+                display: true,
+                text: getTimeFilterTitle(),
+                font: { size: 13, weight: "500" },
+              },
+            },
+          },
+        },
       });
-    } catch (e) {
-      return timestamp;
+    } catch (error) {
+      console.error("Erreur lors de l'initialisation du graphique:", error);
     }
   };
 
-  // Filtrer les notifications
-  const filteredNotifications = notifications.filter((notification) => {
-    // Filtre par statut
-    let statusMatch = true;
-    if (filter === "unread") statusMatch = notification.status === "active";
-    if (filter === "read") statusMatch = notification.status === "read";
-    
-    // Filtre par recherche
-    const searchMatch = searchTerm === "" || 
-      notification.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      notification.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (notification.reference_dossier && notification.reference_dossier.toLowerCase().includes(searchTerm.toLowerCase()));
+  const initializeBarChart = () => {
+    if (!barChartRef.current) return;
 
-    return statusMatch && searchMatch;
-  });
+    const { labels, datasets } = getReportsByMonthAndCategory();
 
-  // Pagination
-  const totalPages = Math.ceil(filteredNotifications.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentNotifications = filteredNotifications.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
+    if (barChartInstance.current) barChartInstance.current.destroy();
 
-  const unreadCount = notifications.filter((n) => n.status === "active").length;
-
-  const handleNotificationClick = async (notification) => {
-    if (notification.status === "active") {
-      await markAsRead(notification.id);
-    }
-
-    let signalementDetails = null;
-    if (notification.reference_dossier) {
-      signalementDetails = await fetchSignalementDetails(
-        notification.reference_dossier
+    try {
+      const ctx = barChartRef.current.getContext("2d");
+      barChartInstance.current = new Chart(ctx, {
+        type: "bar",
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: "top",
+              labels: {
+                usePointStyle: true,
+                font: { size: 12 },
+                padding: 10,
+              },
+            },
+            title: {
+              display: true,
+              text: `Répartition des signalements par type - 12 derniers mois`,
+            },
+            tooltip: {
+              mode: "index",
+              intersect: false,
+              titleFont: { size: 12 },
+              bodyFont: { size: 12 },
+              callbacks: {
+                label: (context) => {
+                  const val = context.parsed?.y ?? context.raw;
+                  return `${context.dataset.label}: ${val} signalement(s)`;
+                },
+                footer: (items) => {
+                  const total = items.reduce(
+                    (s, it) => s + (it.parsed?.y || it.raw || 0),
+                    0
+                  );
+                  return `Total mois: ${total}`;
+                },
+              },
+            },
+          },
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          scales: {
+            x: {
+              stacked: false,
+              title: {
+                display: true,
+                text: "Mois",
+              },
+            },
+            y: {
+              stacked: false,
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: "Nombre de signalements",
+              },
+              ticks: {
+                stepSize: 1,
+              },
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Erreur lors de l'initialisation du diagramme en barres:",
+        error
       );
     }
-
-    setSelectedNotification({
-      ...notification,
-      signalementDetails,
-    });
-    setViewMode("detail");
   };
 
-  const fetchSignalementDetails = async (reference) => {
+  const initializePieChart = () => {
+    if (!pieChartRef.current) return;
+
+    const categoryData = categoriesData.map((cat) => cat.total);
+    const total = categoryData.reduce((sum, value) => sum + value, 0);
+
+    // Only show categories that have data
+    const validCategories = categoriesData.filter(
+      (cat, index) => categoryData[index] > 0
+    );
+    const validData = categoryData.filter((value) => value > 0);
+
+    if (pieChartInstance.current) pieChartInstance.current.destroy();
+
+    // Si pas de données, ne pas créer le graphique
+    if (validData.length === 0 || total === 0) {
+      return;
+    }
+
     try {
-      const token = localStorage.getItem(`${userRole}_token`) || sessionStorage.getItem(`${userRole}_token`);
-      
-      const response = await API.get(`/reports/${reference}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const ctx = pieChartRef.current.getContext("2d");
+      pieChartInstance.current = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: validCategories.map((cat) => cat.name),
+          datasets: [
+            {
+              data: validData,
+              backgroundColor: pieColors.slice(0, validCategories.length),
+              borderColor: "#fff",
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "right",
+              labels: {
+                padding: 10,
+                usePointStyle: true,
+                font: { size: 11 },
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const value = context.raw;
+                  const percentage = ((value / total) * 100).toFixed(1);
+                  return `${context.label}: ${value} (${percentage}%)`;
+                },
+              },
+            },
+          },
         },
       });
-
-      if (response.status === 200) {
-        return response.data.success ? response.data.data : null;
-      }
     } catch (error) {
-    }
-    return null;
-  };
-
-  const handleBackToList = () => {
-    setSelectedNotification(null);
-    setViewMode("list");
-  };
-
-  const handleViewFile = (fileUrl) => {
-    window.open(fileUrl, "_blank");
-  };
-
-  // Handlers pour le header
-  const handleNavigateToNotifications = (navData) => {
-    setNavigationData(navData);
-    if (navData?.view === "detail" && navData.notification) {
-      setSelectedNotification(navData.notification);
-      setViewMode("detail");
-    } else {
-      setViewMode("list");
+      console.error(
+        "Erreur lors de l'initialisation du diagramme circulaire:",
+        error
+      );
     }
   };
 
-  const handleNavigateToProfile = () => {
-    // Navigation vers le profil
-  };
-
-  const handleAvatarUpdate = (newAvatar) => {
-    setHeaderUserData(prev => ({ ...prev, avatar: newAvatar }));
-  };
-
-  const handleDeconnexion = () => {
-    if (onLogout) {
-      onLogout();
+  const getTimeFilterTitle = () => {
+    switch (timeFilter) {
+      case "day":
+        return "Heures (24h)";
+      case "week":
+        return "Jours de la semaine";
+      case "month":
+        return "Semaines du mois";
+      case "year":
+        return "Mois de l'année";
+      default:
+        return "Mois 2025";
     }
   };
 
-  // Render loading state
-  if (isLoading && viewMode === "list") {
+  const handleTimeFilterSelect = (filter) => {
+    setTimeFilter(filter);
+    setShowDatePicker(false);
+  };
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <HeaderTeam
-          onNavigateToNotifications={handleNavigateToNotifications}
-          onDeconnexion={handleDeconnexion}
-          onNavigateToProfile={handleNavigateToProfile}
-          userData={headerUserData}
-          onAvatarUpdate={handleAvatarUpdate}
-          userRole={userRole}
-        />
-        <div className="pt-20 p-4">
-          <div className="max-w-6xl mx-auto">
-            <div className="animate-pulse">
-              <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
-              {[...Array(8)].map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-lg p-3 mb-2 border border-gray-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement des données...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Vue détaillée
-  if (viewMode === "detail" && selectedNotification) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <HeaderTeam
-          onNavigateToNotifications={handleNavigateToNotifications}
-          onDeconnexion={handleDeconnexion}
-          onNavigateToProfile={handleNavigateToProfile}
-          userData={headerUserData}
-          onAvatarUpdate={handleAvatarUpdate}
-          userRole={userRole}
-        />
-        <div className="pt-20 p-4">
-          <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={handleBackToList}
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Retour aux notifications
-              </button>
-              <div className="flex items-center gap-2">
-                {selectedNotification.status === "active" && (
-                  <button
-                    onClick={() => markAsRead(selectedNotification.id)}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
-                  >
-                    <Check className="w-3 h-3" />
-                    Marquer comme lu
-                  </button>
-                )}
-                <button
-                  onClick={() =>
-                    confirmDelete(
-                      selectedNotification.id,
-                      selectedNotification.titre
-                    )
-                  }
-                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm flex items-center gap-1"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  Supprimer
-                </button>
-              </div>
-            </div>
-
-            {/* Carte de notification */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              {/* En-tête */}
-              <div className="border-b border-gray-200 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    {getTypeIcon(selectedNotification.type)}
-                  </div>
-                  <div className="flex-1">
-                    <h1 className="text-lg font-bold text-gray-900 mb-1">
-                      {selectedNotification.titre}
-                    </h1>
-                    <div className="flex items-center gap-3 text-xs text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Bell className="w-3 h-3" />
-                        {getTypeText(selectedNotification.type)}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        {formatDetailedTime(
-                          selectedNotification.created_at ||
-                            selectedNotification.timestamp
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contenu */}
-              <div className="p-4 space-y-4">
-                {/* Message principal */}
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                    Message
-                  </h3>
-                  <div className="bg-gray-50 rounded border p-3">
-                    <p className="text-gray-900 text-sm leading-relaxed whitespace-pre-wrap">
-                      {selectedNotification.message}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Détails spécifiques pour les doublons */}
-                {selectedNotification.type === "doublon_detecte" && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                      <AlertTriangle className="w-4 h-4 text-orange-600" />
-                      Analyse du doublon
-                    </h3>
-                    <div className="bg-orange-50 border border-orange-200 rounded p-3">
-                      <div className="space-y-2">
-                        <p className="text-orange-800 text-sm font-medium">
-                          Ce signalement a été identifié comme un doublon pour les
-                          raisons suivantes :
-                        </p>
-
-                        {selectedNotification.metadata?.raisons_doublon ? (
-                          <ul className="list-disc list-inside space-y-1 text-orange-800 text-sm">
-                            {selectedNotification.metadata.raisons_doublon.map(
-                              (raison, index) => (
-                                <li key={index}>{raison}</li>
-                              )
-                            )}
-                          </ul>
-                        ) : (
-                          <ul className="list-disc list-inside space-y-1 text-orange-800 text-sm">
-                            <li>
-                              Informations du plaignant identiques ou très
-                              similaires
-                            </li>
-                            <li>
-                              Description des faits correspondante à un
-                              signalement précédent
-                            </li>
-                            <li>Localisation et période temporelle identiques</li>
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Détails du signalement */}
-                {selectedNotification.signalementDetails && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                      <FileText className="w-4 h-4 text-blue-600" />
-                      Détails du dossier
-                    </h3>
-                    <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div className="space-y-2">
-                          <div>
-                            <span className="font-medium text-gray-700 text-xs">
-                              PLAIGNANT:
-                            </span>
-                            <p className="text-gray-900">
-                              {selectedNotification.signalementDetails.isAnonymous
-                                ? "Anonyme"
-                                : selectedNotification.signalementDetails.name ||
-                                  "Non spécifié"}
-                            </p>
-                          </div>
-                          {selectedNotification.signalementDetails.email && (
-                            <div>
-                              <span className="font-medium text-gray-700 text-xs">
-                                EMAIL:
-                              </span>
-                              <p className="text-gray-900">
-                                {selectedNotification.signalementDetails.email}
-                              </p>
-                            </div>
-                          )}
-                          <div>
-                            <span className="font-medium text-gray-700 text-xs">
-                              LOCALISATION:
-                            </span>
-                            <p className="text-gray-900">
-                              {selectedNotification.signalementDetails.region ||
-                                "Non spécifié"}
-                              {selectedNotification.signalementDetails.city &&
-                                `, ${selectedNotification.signalementDetails.city}`}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div>
-                            <span className="font-medium text-gray-700 text-xs">
-                              CATÉGORIE:
-                            </span>
-                            <p className="text-gray-900 capitalize">
-                              {selectedNotification.signalementDetails.category?.replace(
-                                /-/g,
-                                " "
-                              ) || "Non spécifié"}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700 text-xs">
-                              RÉFÉRENCE:
-                            </span>
-                            <p className="text-gray-900 font-mono text-blue-600">
-                              {selectedNotification.signalementDetails.reference}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700 text-xs">
-                              DATE DE SOUMISSION:
-                            </span>
-                            <p className="text-gray-900">
-                              {new Date(
-                                selectedNotification.signalementDetails.created_at
-                              ).toLocaleDateString("fr-FR", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      {selectedNotification.signalementDetails.description && (
-                        <div className="mt-3">
-                          <span className="font-medium text-gray-700 text-xs">
-                            DESCRIPTION:
-                          </span>
-                          <div className="bg-white rounded border p-2 mt-1">
-                            <p className="text-gray-900 text-sm leading-relaxed">
-                              {
-                                selectedNotification.signalementDetails
-                                  .description
-                              }
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Pièces jointes */}
-                      {selectedNotification.signalementDetails.files &&
-                        selectedNotification.signalementDetails.files.length >
-                          0 && (
-                          <div className="mt-3">
-                            <span className="font-medium text-gray-700 text-xs">
-                              PREUVES (PIÈCES JOINTES):
-                            </span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                              {selectedNotification.signalementDetails.files.map(
-                                (file, index) => (
-                                  <div
-                                    key={index}
-                                    className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50 cursor-pointer transition-colors"
-                                    onClick={() => handleViewFile(file.url)}
-                                  >
-                                    <File className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm text-gray-900 truncate">
-                                        {file.name}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                                      </p>
-                                    </div>
-                                    <Eye className="w-4 h-4 text-gray-400 hover:text-blue-600 transition-colors" />
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* Fallback pour filesCount si files n'existe pas */}
-                      {(!selectedNotification.signalementDetails.files ||
-                        selectedNotification.signalementDetails.files.length ===
-                          0) &&
-                        selectedNotification.signalementDetails.filesCount >
-                          0 && (
-                          <div className="mt-3">
-                            <span className="font-medium text-gray-700 text-xs">
-                              PREUVES:
-                            </span>
-                            <div className="flex items-center gap-2 p-2 bg-white rounded border mt-1">
-                              <Download className="w-4 h-4 text-blue-600" />
-                              <span className="text-sm text-gray-700">
-                                {
-                                  selectedNotification.signalementDetails
-                                    .filesCount
-                                }{" "}
-                                fichier(s) attaché(s)
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Référence seule */}
-                {selectedNotification.reference_dossier &&
-                  !selectedNotification.signalementDetails && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                        Référence
-                      </h3>
-                      <div className="bg-gray-50 rounded border p-3">
-                        <p className="font-mono text-blue-600 text-sm font-medium">
-                          {selectedNotification.reference_dossier}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Vue liste
   return (
-    <div className="min-h-screen bg-gray-50">
-      <HeaderTeam
-        onNavigateToNotifications={handleNavigateToNotifications}
-        onDeconnexion={handleDeconnexion}
-        onNavigateToProfile={handleNavigateToProfile}
-        userData={headerUserData}
-        onAvatarUpdate={handleAvatarUpdate}
-        userRole={userRole}
-      />
-      <div className="pt-20 p-4">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Notifications Investigateur</h1>
-                <p className="text-gray-600 text-xs mt-1">
-                  {notifications.length} notification(s) • {unreadCount} non lu(s)
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={fetchAllNotifications}
-                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                  title="Actualiser"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                  >
-                    <Check className="w-3 h-3" />
-                    Tout marquer comme lu
-                  </button>
-                )}
-              </div>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      {/* En-tête */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          Tableau de Bord Investigateur
+        </h1>
+        <p className="text-sm text-gray-600">
+          Vue d'ensemble de vos enquêtes en cours
+        </p>
+      </div>
+
+      {/* Cartes de statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Dossiers assignés</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {statsData.dossiersAssignes}
+              </p>
             </div>
-
-            {/* Barre de recherche et filtres */}
-            <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              {/* Barre de recherche */}
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher dans les notifications..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            <div className="bg-blue-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
-              </div>
-
-              {/* Filtres */}
-              <div className="flex gap-2 border border-gray-300 rounded-lg p-1 bg-gray-50">
-                <button
-                  onClick={() => {
-                    setFilter("all");
-                    setCurrentPage(1);
-                  }}
-                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                    filter === "all"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  <span className="flex items-center gap-1">
-                    <Bell className="w-3 h-3" />
-                    Toutes
-                  </span>
-                </button>
-                <button
-                  onClick={() => {
-                    setFilter("unread");
-                    setCurrentPage(1);
-                  }}
-                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                    filter === "unread"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  <span className="flex items-center gap-1">
-                    <Mail className="w-3 h-3" />
-                    Non lues
-                    {unreadCount > 0 && (
-                      <span className="bg-blue-100 text-blue-600 text-xs px-1.5 py-0.5 rounded-full">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                <button
-                  onClick={() => {
-                    setFilter("read");
-                    setCurrentPage(1);
-                  }}
-                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                    filter === "read"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  <span className="flex items-center gap-1">
-                    <MailOpen className="w-3 h-3" />
-                    Lues
-                  </span>
-                </button>
-              </div>
+              </svg>
             </div>
           </div>
+        </div>
 
-          {/* Liste des notifications */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            {currentNotifications.length === 0 ? (
-              <div className="text-center py-8">
-                <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-gray-900 mb-1">
-                  {filter === "all"
-                    ? "Aucune notification"
-                    : filter === "unread"
-                    ? "Aucune notification non lue"
-                    : "Aucune notification lue"}
-                </h3>
-                <p className="text-gray-600 text-xs">
-                  {filter === "all"
-                    ? "Vos notifications apparaîtront ici."
-                    : "Aucune notification ne correspond au filtre sélectionné."}
-                </p>
-              </div>
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-orange-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">En cours</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {statsData.enCours}
+              </p>
+            </div>
+            <div className="bg-orange-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-orange-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-purple-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Soumis à la BIANCO</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {statsData.soumisBianco}
+              </p>
+            </div>
+            <div className="bg-purple-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Enquêtes complétées</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {statsData.enquetesCompletees}
+              </p>
+            </div>
+            <div className="bg-green-100 p-3 rounded-full">
+              <svg
+                className="w-6 h-6 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Graphiques */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Graphique linéaire */}
+        <div className="bg-white rounded-lg shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Évolution temporelle
+            </h2>
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              {timeFilter === "year" ? "Année" : timeFilter}
+            </button>
+          </div>
+          <div className="h-64">
+            <canvas ref={chartRef}></canvas>
+          </div>
+        </div>
+
+        {/* Graphique circulaire */}
+        <div className="bg-white rounded-lg shadow-sm p-5">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Répartition par catégorie
+          </h2>
+          <div className="h-64">
+            {categoriesData.some((cat) => cat.total > 0) ? (
+              <canvas ref={pieChartRef}></canvas>
             ) : (
-              <>
-                {/* Liste */}
-                <div className="divide-y divide-gray-100">
-                  {currentNotifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className={`flex items-start p-3 hover:bg-gray-50 cursor-pointer transition-colors ${
-                        notification.status === "active"
-                          ? "bg-blue-50 border-l-4 border-l-blue-500"
-                          : ""
-                      }`}
-                      onClick={() => handleNotificationClick(notification)}
-                    >
-                      {/* Icône type */}
-                      <div className="flex-shrink-0 mr-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          {getTypeIcon(notification.type)}
-                        </div>
-                      </div>
-
-                      {/* Contenu */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between mb-1">
-                          <div className="flex items-center gap-1">
-                            <span
-                              className={`font-semibold text-xs ${
-                                notification.status === "active"
-                                  ? "text-gray-900"
-                                  : "text-gray-600"
-                              }`}
-                            >
-                              {getTypeText(notification.type)}
-                            </span>
-                            {notification.status === "active" && (
-                              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formatTime(
-                              notification.created_at || notification.timestamp
-                            )}
-                          </div>
-                        </div>
-
-                        <h3
-                          className={`font-semibold text-gray-900 text-xs mb-1 ${
-                            notification.status === "active"
-                              ? ""
-                              : "text-gray-600"
-                          }`}
-                        >
-                          {notification.titre}
-                        </h3>
-
-                        <p className="text-gray-600 text-xs mb-1 leading-relaxed line-clamp-2">
-                          {notification.message}
-                        </p>
-
-                        {notification.reference_dossier && (
-                          <div className="flex items-center gap-1 text-xs">
-                            <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 border text-xs">
-                              Réf: {notification.reference_dossier}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="px-4 py-3 border-t border-gray-200 bg-white">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-gray-500">
-                        {indexOfFirstItem + 1}-
-                        {Math.min(indexOfLastItem, filteredNotifications.length)}{" "}
-                        sur {filteredNotifications.length}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.max(1, prev - 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="p-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <ChevronLeft className="w-3 h-3" />
-                        </button>
-
-                        <span className="text-xs text-gray-600 mx-2">
-                          {currentPage} / {totalPages}
-                        </span>
-
-                        <button
-                          onClick={() =>
-                            setCurrentPage((prev) =>
-                              Math.min(totalPages, prev + 1)
-                            )
-                          }
-                          disabled={currentPage === totalPages}
-                          className="p-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
+              <div className="flex items-center justify-center h-full text-gray-500">
+                Aucune donnée disponible
+              </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Graphique en barres */}
+      <div className="bg-white rounded-lg shadow-sm p-5 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Analyse mensuelle détaillée
+        </h2>
+        <div className="h-80">
+          <canvas ref={barChartRef}></canvas>
+        </div>
+      </div>
+
+      {/* Tableau des dossiers récents */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Dossiers assignés récemment
+          </h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Référence
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Catégorie
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Demandeur
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Statut
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {dossiersRecents.length > 0 ? (
+                dossiersRecents.map((dossier, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                      {dossier.reference}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {dossier.categorie}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {dossier.date}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {dossier.demandeur}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          dossier.statut === "En cours"
+                            ? "bg-orange-100 text-orange-800"
+                            : dossier.statut === "Soumis BIANCO"
+                            ? "bg-purple-100 text-purple-800"
+                            : dossier.statut === "Complété"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {dossier.statut}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-8 text-center text-sm text-gray-500"
+                  >
+                    Aucun dossier assigné pour le moment
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   );
 };
 
-export default NotificationsInvestView;
+export default DashboardInvestView;

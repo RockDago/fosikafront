@@ -13,7 +13,6 @@ import {
   UserCheck,
   Filter,
   Users,
-  Archive,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -162,7 +161,7 @@ const ReportsView = () => {
             type_signalement: report.is_anonymous ? "Anonyme" : "Non-Anonyme",
             explication: report.description || "Aucune description",
             files: filesArray,
-            status: report.status || "traitement_classification",
+            status: report.status || "en_cours",
             assigned_to: report.assigned_to || "Non assigné",
             city: report.city,
             province: report.province,
@@ -228,12 +227,10 @@ const ReportsView = () => {
 
   const getDisplayStatus = (status) => {
     const statusMap = {
-      traitement_classification: "Traitement et Classification",
+      en_cours: "En cours",
       investigation: "Investigation",
       transmis_autorite: "Transmis aux autorités compétentes",
-      refuse: "Refusé",
-      classifier: "Classifié",
-      en_cours: "En cours",
+      classifier: "Complété",
       finalise: "Finalisé",
     };
     return statusMap[status] || status;
@@ -508,11 +505,9 @@ const ReportsView = () => {
         }
 
         await fetchReports();
-        alert("✅ Signalement supprimé avec succès!");
       }
     } catch (error) {
       if (error.response?.status === 404) {
-        alert("❌ Signalement non trouvé. Il a peut-être déjà été supprimé.");
         await fetchReports();
         setShowDeleteModal(false);
         setSelectedReportForAction(null);
@@ -771,15 +766,11 @@ const ReportsView = () => {
       total: filteredReports.length,
       en_cours: filteredReports.filter((r) => r.status === "en_cours").length,
       finalise: filteredReports.filter((r) => r.status === "finalise").length,
-      traitement_classification: filteredReports.filter(
-        (r) => r.status === "traitement_classification"
-      ).length,
       investigation: filteredReports.filter((r) => r.status === "investigation")
         .length,
       transmis_autorite: filteredReports.filter(
         (r) => r.status === "transmis_autorite"
       ).length,
-      refuse: filteredReports.filter((r) => r.status === "refuse").length,
       classifier: filteredReports.filter((r) => r.status === "classifier")
         .length,
     };
@@ -810,8 +801,8 @@ const ReportsView = () => {
       backgroundColor: "#ffffff",
     })
       .then((canvas) => {
-        const imgWidth = 210; // A4 width in mm
-        const pageHeight = 297; // A4 height in mm
+        const imgWidth = 210;
+        const pageHeight = 297;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
         let heightLeft = imgHeight;
         let position = 0;
@@ -928,38 +919,20 @@ const ReportsView = () => {
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-600 block mb-1">
-                        Province:
-                      </span>
-                      <p className="font-medium text-sm">
-                        {selectedReport.province || "Non spécifié"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 block mb-1">Région:</span>
-                      <p className="font-medium text-sm">
-                        {selectedReport.region || "Non spécifié"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 block mb-1">Ville:</span>
-                      <p className="font-medium text-sm">
-                        {selectedReport.city || "Non spécifié"}
-                      </p>
-                    </div>
-                    <div>
                       <span className="text-gray-600 block mb-1">Statut:</span>
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedReport.status === "traitement_classification"
-                            ? "bg-gray-100 text-gray-800"
-                            : selectedReport.status === "investigation"
+                          selectedReport.status === "en_cours"
                             ? "bg-yellow-100 text-yellow-800"
-                            : selectedReport.status === "transmis_autorite"
-                            ? "bg-purple-100 text-purple-800"
-                            : selectedReport.status === "classifier"
+                            : selectedReport.status === "finalise"
                             ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
+                            : selectedReport.status === "classifier"
+                            ? "bg-blue-100 text-blue-800"
+                            : selectedReport.status === "investigation"
+                            ? "bg-purple-100 text-purple-800"
+                            : selectedReport.status === "transmis_autorite"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : "bg-gray-100 text-gray-800"
                         }`}
                       >
                         {getDisplayStatus(selectedReport.status)}
@@ -1321,12 +1294,13 @@ const ReportsView = () => {
                     required
                   >
                     <option value="">Sélectionner un statut</option>
+                    <option value="en_cours">En cours</option>
                     <option value="investigation">Investigation</option>
                     <option value="transmis_autorite">
                       Transmis aux autorités compétentes
                     </option>
-                    <option value="refuse">Refusé</option>
-                    <option value="classifier">Classifié</option>
+                    <option value="classifier">Complété</option>
+                    <option value="finalise">Finalisé</option>
                   </select>
                 </div>
 
@@ -1371,17 +1345,23 @@ const ReportsView = () => {
                     <span className="font-semibold">Type:</span>{" "}
                     <span
                       className={
-                        selectedReportForAction?.typesignalement === "Anonyme"
+                        selectedReportForAction?.type_signalement === "Anonyme"
                           ? "text-blue-600"
                           : "text-green-600"
                       }
                     >
-                      {selectedReportForAction?.typesignalement}
+                      {selectedReportForAction?.type_signalement}
                     </span>
                   </p>
+                  {selectedReportForAction?.type_signalement === "Anonyme" && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Seuls la description et les pièces jointes peuvent être
+                      modifiés pour un signalement anonyme
+                    </p>
+                  )}
                 </div>
 
-                {selectedReportForAction?.typesignalement !== "Anonyme" && (
+                {selectedReportForAction?.type_signalement !== "Anonyme" && (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -1390,11 +1370,11 @@ const ReportsView = () => {
                         </label>
                         <input
                           type="text"
-                          value={editData.nomprenom}
+                          value={editData.nom_prenom}
                           onChange={(e) =>
                             setEditData({
                               ...editData,
-                              nomprenom: e.target.value,
+                              nom_prenom: e.target.value,
                             })
                           }
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -1500,7 +1480,7 @@ const ReportsView = () => {
                       setEditData({ ...editData, description: e.target.value })
                     }
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                     required
                   />
                 </div>
@@ -1742,7 +1722,6 @@ const ReportsView = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Formulaire à gauche */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               Configuration du Rapport
@@ -1860,7 +1839,6 @@ const ReportsView = () => {
             </form>
           </div>
 
-          {/* Prévisualisation à droite */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               Prévisualisation du Rapport
@@ -1868,7 +1846,6 @@ const ReportsView = () => {
 
             {showReportPreview && generatedReport ? (
               <div id="report-preview" className="pdf-export bg-white p-8">
-                {/* En-tête du rapport */}
                 <div className="text-center border-b-2 border-gray-800 pb-6 mb-6">
                   <div className="flex justify-between items-center mb-4">
                     <div className="text-left">
@@ -1918,7 +1895,6 @@ const ReportsView = () => {
                   </p>
                 </div>
 
-                {/* Informations du rapport */}
                 <div className="mb-6">
                   <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
                     Informations Générales
@@ -1952,7 +1928,6 @@ const ReportsView = () => {
                   </div>
                 </div>
 
-                {/* Statistiques */}
                 <div className="mb-6">
                   <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
                     Statistiques des Signalements
@@ -1965,7 +1940,7 @@ const ReportsView = () => {
                       </span>
                     </div>
                     <div className="flex justify-between border-b pb-2">
-                      <span>Signalements en cours de traitement:</span>
+                      <span>Signalements en cours:</span>
                       <span className="font-bold text-amber-600">
                         {generatedReport.stats.en_cours}
                       </span>
@@ -1974,12 +1949,6 @@ const ReportsView = () => {
                       <span>Signalements finalisés:</span>
                       <span className="font-bold text-green-600">
                         {generatedReport.stats.finalise}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b pb-2">
-                      <span>En phase de traitement et classification:</span>
-                      <span className="font-bold text-blue-600">
-                        {generatedReport.stats.traitement_classification}
                       </span>
                     </div>
                     <div className="flex justify-between border-b pb-2">
@@ -1995,22 +1964,19 @@ const ReportsView = () => {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Signalements refusés:</span>
-                      <span className="font-bold text-red-600">
-                        {generatedReport.stats.refuse}
+                      <span>Signalements complétés:</span>
+                      <span className="font-bold text-blue-600">
+                        {generatedReport.stats.classifier}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Analyse et synthèse professionnelle */}
                 <div className="mb-6">
                   <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
                     Analyse
                   </h2>
                   <div className="space-y-4 text-sm leading-relaxed">
-                    <p></p>
-
                     <p>
                       Le présent rapport d'activité du système FOSIKA couvre la
                       période du <strong> {generatedReport.periode} </strong>
@@ -2054,6 +2020,12 @@ const ReportsView = () => {
                         </strong>{" "}
                         ont été transmis aux autorités compétentes
                       </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.classifier} dossiers
+                        </strong>{" "}
+                        ont été complétés et classés
+                      </li>
                     </ul>
 
                     <p>
@@ -2077,7 +2049,6 @@ const ReportsView = () => {
                   </div>
                 </div>
 
-                {/* Pied de page */}
                 <div className="mt-8 pt-6 border-t-2 border-gray-800 text-center text-xs text-gray-600">
                   <p className="font-bold">
                     © DAAQ-MESUPRES 2025 - Tous droits réservés
@@ -2117,14 +2088,14 @@ const ReportsView = () => {
         <div>
           <h1 className="text-base font-semibold">
             {currentTab === "classifier"
-              ? "Dossiers classifiés"
+              ? "Dossiers complétés"
               : currentTab === "assignes"
               ? "Dossiers assignés"
               : "Liste complète des signalements"}
           </h1>
           <p className="text-xs text-gray-500">
             {currentTab === "classifier"
-              ? "Signalements ayant déjà été classifiés."
+              ? "Signalements ayant déjà été complétés."
               : currentTab === "assignes"
               ? "Signalements assignés à une entité de traitement."
               : "Gestion et suivi des dossiers avec filtres avancés."}
@@ -2307,7 +2278,7 @@ const ReportsView = () => {
             setCurrentPage(1);
           }}
         >
-          Dossiers Classifiés ({tabStats.classifier})
+          Dossiers Complétés ({tabStats.classifier})
         </button>
       </div>
 
@@ -2331,9 +2302,9 @@ const ReportsView = () => {
             <option value="">Tous les statuts</option>
             <option value="en_cours">En cours</option>
             <option value="finalise">Finalisé</option>
-            <option value="classifier">Classifié</option>
-            <option value="doublon">Doublon</option>
-            <option value="refuse">Refusé</option>
+            <option value="classifier">Complété</option>
+            <option value="investigation">Investigation</option>
+            <option value="transmis_autorite">Transmis aux autorités</option>
           </select>
         </div>
       </div>
@@ -2409,19 +2380,17 @@ const ReportsView = () => {
                     <td className="px-2 py-2">
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          report.status === "traitement_classification"
-                            ? "bg-gray-100 text-gray-800"
-                            : report.status === "investigation"
+                          report.status === "en_cours"
                             ? "bg-yellow-100 text-yellow-800"
-                            : report.status === "transmis_autorite"
-                            ? "bg-purple-100 text-purple-800"
-                            : report.status === "classifier"
-                            ? "bg-green-100 text-green-800"
-                            : report.status === "en_cours"
-                            ? "bg-amber-100 text-amber-800"
                             : report.status === "finalise"
                             ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
+                            : report.status === "classifier"
+                            ? "bg-blue-100 text-blue-800"
+                            : report.status === "investigation"
+                            ? "bg-purple-100 text-purple-800"
+                            : report.status === "transmis_autorite"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : "bg-gray-100 text-gray-800"
                         }`}
                       >
                         {getDisplayStatus(report.status)}
@@ -2861,12 +2830,13 @@ const ReportsView = () => {
                   required
                 >
                   <option value="">Sélectionner un statut</option>
+                  <option value="en_cours">En cours</option>
                   <option value="investigation">Investigation</option>
                   <option value="transmis_autorite">
                     Transmis aux autorités compétentes
                   </option>
-                  <option value="refuse">Refusé</option>
-                  <option value="classifier">Classifié</option>
+                  <option value="classifier">Complété</option>
+                  <option value="finalise">Finalisé</option>
                 </select>
               </div>
 
@@ -2909,15 +2879,15 @@ const ReportsView = () => {
                   <span className="font-semibold">Type:</span>{" "}
                   <span
                     className={
-                      selectedReportForAction?.typesignalement === "Anonyme"
+                      selectedReportForAction?.type_signalement === "Anonyme"
                         ? "text-blue-600"
                         : "text-green-600"
                     }
                   >
-                    {selectedReportForAction?.typesignalement}
+                    {selectedReportForAction?.type_signalement}
                   </span>
                 </p>
-                {selectedReportForAction?.typesignalement === "Anonyme" && (
+                {selectedReportForAction?.type_signalement === "Anonyme" && (
                   <p className="text-xs text-amber-600 mt-1">
                     ⚠️ Seuls la description et les pièces jointes peuvent être
                     modifiés pour un signalement anonyme
@@ -2925,119 +2895,123 @@ const ReportsView = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nom et Prénom
-                  </label>
-                  <input
-                    type="text"
-                    value={editData.nomprenom}
-                    onChange={(e) =>
-                      setEditData({ ...editData, nomprenom: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                    placeholder="Nom complet"
-                    disabled={
-                      selectedReportForAction?.typesignalement === "Anonyme"
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={editData.email}
-                    onChange={(e) =>
-                      setEditData({ ...editData, email: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                    placeholder="email@exemple.com"
-                    disabled={
-                      selectedReportForAction?.typesignalement === "Anonyme"
-                    }
-                  />
-                </div>
-              </div>
+              {selectedReportForAction?.type_signalement !== "Anonyme" && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nom et Prénom
+                      </label>
+                      <input
+                        type="text"
+                        value={editData.nom_prenom}
+                        onChange={(e) =>
+                          setEditData({ ...editData, nom_prenom: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                        placeholder="Nom complet"
+                        disabled={
+                          selectedReportForAction?.type_signalement === "Anonyme"
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={editData.email}
+                        onChange={(e) =>
+                          setEditData({ ...editData, email: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                        placeholder="email@exemple.com"
+                        disabled={
+                          selectedReportForAction?.type_signalement === "Anonyme"
+                        }
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Téléphone
-                  </label>
-                  <input
-                    type="text"
-                    value={editData.telephone}
-                    onChange={(e) =>
-                      setEditData({ ...editData, telephone: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                    placeholder="+261 XX XX XXX XX"
-                    disabled={
-                      selectedReportForAction?.typesignalement === "Anonyme"
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ville
-                  </label>
-                  <input
-                    type="text"
-                    value={editData.city}
-                    onChange={(e) =>
-                      setEditData({ ...editData, city: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                    placeholder="Ville"
-                    disabled={
-                      selectedReportForAction?.typesignalement === "Anonyme"
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Province
-                  </label>
-                  <input
-                    type="text"
-                    value={editData.province}
-                    onChange={(e) =>
-                      setEditData({ ...editData, province: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                    placeholder="Province"
-                    disabled={
-                      selectedReportForAction?.typesignalement === "Anonyme"
-                    }
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Téléphone
+                      </label>
+                      <input
+                        type="text"
+                        value={editData.telephone}
+                        onChange={(e) =>
+                          setEditData({ ...editData, telephone: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                        placeholder="+261 XX XX XXX XX"
+                        disabled={
+                          selectedReportForAction?.type_signalement === "Anonyme"
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Ville
+                      </label>
+                      <input
+                        type="text"
+                        value={editData.city}
+                        onChange={(e) =>
+                          setEditData({ ...editData, city: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                        placeholder="Ville"
+                        disabled={
+                          selectedReportForAction?.type_signalement === "Anonyme"
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Province
+                      </label>
+                      <input
+                        type="text"
+                        value={editData.province}
+                        onChange={(e) =>
+                          setEditData({ ...editData, province: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                        placeholder="Province"
+                        disabled={
+                          selectedReportForAction?.type_signalement === "Anonyme"
+                        }
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Catégorie
-                </label>
-                <select
-                  value={editData.category}
-                  onChange={(e) =>
-                    setEditData({ ...editData, category: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                  disabled={
-                    selectedReportForAction?.typesignalement === "Anonyme"
-                  }
-                >
-                  <option value="">Sélectionner une catégorie</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.emoji} {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Catégorie
+                    </label>
+                    <select
+                      value={editData.category}
+                      onChange={(e) =>
+                        setEditData({ ...editData, category: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={
+                        selectedReportForAction?.type_signalement === "Anonyme"
+                      }
+                    >
+                      <option value="">Sélectionner une catégorie</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.emoji} {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

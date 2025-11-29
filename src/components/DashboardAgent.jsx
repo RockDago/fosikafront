@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import API from "../config/axios";
 import HeaderTeam from "./HeaderTeam";
 import SidebarAgent from "./SidebarAgent";
-import DashboardView from "./views/DashboardView"; // Changer DashboardAgentView par DashboardView
+import DashboardView from "./views/DashboardView";
 import ReportsView from "./views/ReportsView";
 import ActivitesView from "./views/ActivitesView";
 import ProfileTeam from "./ProfileTeam";
@@ -15,17 +15,32 @@ const DashboardAgent = ({ onDeconnexion }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [agentData, setAgentData] = useState(null);
   const [avatarUpdated, setAvatarUpdated] = useState(0);
-  const [headerAvatarUpdate, setHeaderAvatarUpdate] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [notificationParams, setNotificationParams] = useState(null);
+
+  // Gestion de la session expirée
+  const handleSessionExpired = useCallback(() => {
+    teamUtils.logout("agent");
+    setIsAuthenticated(false);
+    
+    setTimeout(() => {
+      alert("Votre session a expiré. Vous allez être redirigé.");
+    }, 100);
+
+    if (onDeconnexion) {
+      onDeconnexion();
+    }
+  }, [onDeconnexion]);
 
   // Vérifier l'authentification au chargement
   useEffect(() => {
     const checkAuth = () => {
       const token = teamUtils.getAuthToken("agent");
+      const userType = teamUtils.getUserType();
 
-      if (token) {
+      if (token && userType === "agent") {
         setIsAuthenticated(true);
         return true;
       } else {
@@ -38,98 +53,82 @@ const DashboardAgent = ({ onDeconnexion }) => {
     checkAuth();
   }, []);
 
-  const fetchAgentData = async () => {
+  // Charger les données de l'agent
+  const fetchAgentData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await API.get("/agent/profile");
+      setError("");
+      
+      const token = teamUtils.getAuthToken("agent");
+      if (!token) {
+        handleSessionExpired();
+        return;
+      }
 
+      const response = await API.get("/agent/profile");
+      
       if (response.data.success) {
         setAgentData(response.data.data);
         setData(response.data.data);
+      } else {
+        throw new Error("Réponse invalide du serveur");
       }
     } catch (error) {
       if (error.response?.status === 401) {
         handleSessionExpired();
+      } else if (error.message?.includes("INSUFFICIENT_RESOURCES") || error.code === 'ERR_NETWORK') {
+        setError("Problème de connexion. Vérifiez votre réseau.");
       } else {
-        console.error("Erreur lors du chargement des données:", error);
+        setError("Erreur lors du chargement des données.");
       }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [handleSessionExpired]);
 
-  const handleSessionExpired = () => {
-    // Nettoyer le stockage
-    teamUtils.logout("agent");
-    setIsAuthenticated(false);
-
-    // Afficher une alerte
-    setTimeout(() => {
-      alert(
-        "Votre session a expiré. Vous allez être redirigé vers la page de connexion."
-      );
-    }, 100);
-
-    // Appeler la fonction de déconnexion parente
-    if (onDeconnexion) {
-      onDeconnexion();
-    }
-  };
-
-  // Charger les données de l'agent si authentifié
+  // Charger les données si authentifié
   useEffect(() => {
     if (isAuthenticated) {
       fetchAgentData();
     }
-  }, [isAuthenticated, avatarUpdated]);
+  }, [isAuthenticated, avatarUpdated, fetchAgentData]);
 
-  // Vérifier périodiquement la validité de la session
+  // Vérification périodique de session
   useEffect(() => {
-    if (!isAuthenticated) return;
-
-    let interval;
-    let timeoutId;
+    if (!isAuthenticated || !agentData) return;
 
     const checkSession = async () => {
       try {
-        const response = await API.get("/agent/profile");
-        if (!response.data.success) {
-          handleSessionExpired();
-        }
+        await API.get("/agent/profile");
       } catch (error) {
         if (error.response?.status === 401) {
           handleSessionExpired();
-          if (interval) clearInterval(interval);
-        } else if (error.response?.status === 429) {
-          // Rate limiting - augmenter le délai
-          console.warn(
-            "⚠️ Rate limit détecté lors de la vérification de session"
-          );
-          if (interval) clearInterval(interval);
-          // Attendre 60 secondes avant de réessayer
-          timeoutId = setTimeout(() => {
-            interval = setInterval(checkSession, 30000);
-          }, 60000);
         }
       }
     };
 
-    interval = setInterval(checkSession, 30000);
+    const interval = setInterval(checkSession, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, agentData, handleSessionExpired]);
 
-    return () => {
-      if (interval) clearInterval(interval);
-      if (timeoutId) clearTimeout(timeoutId);
+  // Écouter les événements de déconnexion
+  useEffect(() => {
+    const handleTokenExpired = () => {
+      handleSessionExpired();
     };
-  }, [isAuthenticated]);
+
+    window.addEventListener("tokenExpired", handleTokenExpired);
+    
+    return () => {
+      window.removeEventListener("tokenExpired", handleTokenExpired);
+    };
+  }, [handleSessionExpired]);
 
   const handleAvatarUpdate = () => {
-    // Trigger fetchAgentData by updating the trigger state
-    setAvatarUpdated((prev) => prev + 1);
-    setHeaderAvatarUpdate((prev) => prev + 1);
+    setAvatarUpdated(prev => prev + 1);
   };
 
   const handleHeaderAvatarUpdate = () => {
-    setHeaderAvatarUpdate((prev) => prev + 1);
     fetchAgentData();
   };
 
@@ -151,11 +150,26 @@ const DashboardAgent = ({ onDeconnexion }) => {
       );
     }
 
+    if (error && !agentData) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <div className="text-red-600 text-lg mb-2">Erreur</div>
+          <p className="text-gray-700 mb-4">{error}</p>
+          <button
+            onClick={fetchAgentData}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Réessayer
+          </button>
+        </div>
+      );
+    }
+
     const displayData = data || {};
 
     switch (currentView) {
       case "dashboard":
-        return <DashboardView data={displayData} />; // Utiliser DashboardView
+        return <DashboardView data={displayData} />;
       case "signalements":
         return <ReportsView data={displayData} />;
       case "rapports":
@@ -183,7 +197,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
           />
         );
       default:
-        return <DashboardView data={displayData} />; // Utiliser DashboardView
+        return <DashboardView data={displayData} />;
     }
   };
 
@@ -212,8 +226,7 @@ const DashboardAgent = ({ onDeconnexion }) => {
               Erreur d'authentification
             </h2>
             <p className="text-gray-600 mb-4">
-              Impossible d'accéder au tableau de bord. Le token
-              d'authentification est manquant.
+              Impossible d'accéder au tableau de bord.
             </p>
             <button
               onClick={() => (window.location.href = "/login")}

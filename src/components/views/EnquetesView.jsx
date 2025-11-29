@@ -22,13 +22,18 @@ import {
   Users,
 } from "lucide-react";
 import API from "../../config/axios";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+import repLogo from "../../assets/images/logo rep.png";
+import mesupresLogo from "../../assets/images/logo mesupres.png";
+import fosikaLogo from "../../assets/images/logo fosika.png";
 
 const EnquetesView = () => {
   const [currentTab, setCurrentTab] = useState("tous");
   const [filters, setFilters] = useState({
     search: "",
-    province: "",
-    region: "",
+    statut: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -38,6 +43,7 @@ const EnquetesView = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showReportPreview, setShowReportPreview] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedEnqueteForAction, setSelectedEnqueteForAction] = useState(null);
   const [sortConfig, setSortConfig] = useState({
@@ -51,10 +57,8 @@ const EnquetesView = () => {
     pieces: true,
   });
 
-  // États pour les modals
   const [assignData, setAssignData] = useState({
-    assignTo: "",
-    reason: "",
+    assignTo: "investigateur",
   });
 
   const [statusData, setStatusData] = useState({
@@ -65,9 +69,51 @@ const EnquetesView = () => {
     type: "quotidien",
     dateDebut: new Date().toISOString().split("T")[0],
     dateFin: new Date().toISOString().split("T")[0],
+    categories: [],
+    notes: "",
   });
 
-  // Charger les données réelles depuis l'API
+  const [generatedReport, setGeneratedReport] = useState(null);
+
+  const categories = [
+    {
+      id: "faux-diplomes",
+      emoji: "📜",
+      name: "Faux Diplômes",
+    },
+    {
+      id: "offre-formation-irreguliere",
+      emoji: "🎓",
+      name: "Offre de formation irrégulière (non habilité)",
+    },
+    {
+      id: "recrutements-irreguliers",
+      emoji: "💼",
+      name: "Recrutements Irréguliers",
+    },
+    {
+      id: "harcelement",
+      emoji: "⚠️",
+      name: "Harcèlement",
+    },
+    {
+      id: "corruption",
+      emoji: "🔴",
+      name: "Corruption",
+    },
+    {
+      id: "divers",
+      emoji: "🏷️",
+      name: "Divers",
+    },
+  ];
+
+  const assignToOptions = [
+    { value: "investigateur", label: "Investigateur" },
+    { value: "cac_daj", label: "DAAQ / CAC / DAJ" },
+    { value: "autorite_competente", label: "Autorité compétente" },
+  ];
+
   useEffect(() => {
     fetchAssignedReports();
   }, []);
@@ -75,90 +121,62 @@ const EnquetesView = () => {
   const fetchAssignedReports = async () => {
     setIsLoading(true);
     try {
-      console.log("🔄 Chargement des dossiers assignés...");
-
-      // Essayer d'abord l'endpoint assigné
-      try {
-        const response = await API.get("/reports/assigned");
-        console.log("✅ Dossiers assignés chargés:", response.data);
-
-        if (response.data.success) {
-          processApiResponse(response.data);
-          return;
-        }
-      } catch (assignError) {
-        console.log(
-          "❌ Endpoint /assigned non disponible, tentative avec /reports"
-        );
+      const response = await API.get("/reports/assigned");
+      
+      if (response.data.success) {
+        processApiResponse(response.data);
+        return;
       }
-
-      // Récupérer tous les rapports
+    } catch (assignError) {
       try {
         const response = await API.get("/reports");
-        console.log("✅ Tous les rapports chargés:", response.data);
-
+        
         if (response.data.success) {
           const allReports = response.data.data || [];
-          
-          // Pour le moment, on prend tous les rapports comme assignés
           const assignedReports = allReports;
 
           processApiResponse({
             success: true,
             data: assignedReports,
-            stats: {
-              dossiersAssignes: assignedReports.length,
-              soumisBianco: assignedReports.filter((r) => r.status === "finalise").length,
-              enquetesCompletees: assignedReports.filter((r) => r.status === "classifier").length,
-              totalDossiers: assignedReports.length,
-            }
           });
           return;
         }
       } catch (reportsError) {
-        console.error("❌ Erreur avec l'endpoint /reports:", reportsError);
+        setEnquetes([]);
       }
-
-      // Si les deux endpoints échouent
-      throw new Error("Impossible de charger les données depuis l'API");
-    } catch (error) {
-      console.error("❌ Erreur finale:", error);
-      setEnquetes([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fonction pour traiter la réponse API
   const processApiResponse = (apiData) => {
     if (apiData.success) {
       const reports = apiData.data || [];
       
-      // Formater les données pour correspondre à la structure attendue
       const formattedEnquetes = reports.map((report) => ({
         id: report.id,
         reference: report.reference || `REF-${report.id}`,
         date: new Date(report.created_at || report.date).toLocaleDateString("fr-FR"),
         nom_prenom: report.name || report.demandeur || "Anonyme",
         categorie: getCategoryName(report.category),
-        demandeur: getAssignedUserRole(report.assigned_to), // Afficher le rôle de la personne qui a assigné
+        demandeur: getAssignedUserRole(report.assigned_to),
         statut: getStatusLabel(report.status),
         province: report.province || "Non spécifié",
         region: report.region || "Non spécifié",
-        rawData: report, // Conserver les données brutes pour référence
+        rawData: report,
         email: report.email || "N/A",
         telephone: report.phone || "N/A",
         explication: report.description || "Aucune description",
         files: report.files || [],
         type_signalement: report.is_anonymous ? "Anonyme" : "Non-Anonyme",
-        assigned_to: report.assigned_to || "Non assigné"
+        assigned_to: report.assigned_to || "Non assigné",
+        status: report.status || "en_cours"
       }));
 
       setEnquetes(formattedEnquetes);
     }
   };
 
-  // Fonction pour obtenir le nom de la catégorie
   const getCategoryName = (category) => {
     const names = {
       "faux-diplomes": "Faux Diplômes",
@@ -172,7 +190,6 @@ const EnquetesView = () => {
     return names[category] || category;
   };
 
-  // Fonction pour obtenir le rôle de l'utilisateur assigné
   const getAssignedUserRole = (assignedTo) => {
     if (!assignedTo) return "Non assigné";
     
@@ -186,22 +203,17 @@ const EnquetesView = () => {
     return roles[assignedTo] || `Utilisateur ${assignedTo}`;
   };
 
-  // Fonction pour obtenir le label du statut
   const getStatusLabel = (status) => {
     const labels = {
       en_cours: "En cours",
-      finalise: "Soumis BIANCO",
+      finalise: "Finalisé",
       classifier: "Complété",
-      doublon: "Doublon",
-      refuse: "Refusé",
-      traitement_classification: "Traitement et Classification",
       investigation: "Investigation",
       transmis_autorite: "Transmis aux autorités compétentes",
     };
     return labels[status] || status;
   };
 
-  // Fonction pour obtenir l'affichage de l'assignation
   const getDisplayAssignedTo = (assignedTo) => {
     const assignMap = {
       investigateur: "Investigateur",
@@ -211,68 +223,17 @@ const EnquetesView = () => {
     return assignMap[assignedTo] || assignedTo || "Non assigné";
   };
 
-  // Structure des provinces et régions de Madagascar
-  const madagascarRegions = useMemo(
-    () => [
-      {
-        province: "Antananarivo",
-        regions: ["Analamanga", "Bongolava", "Itasy", "Vakinankaratra"],
-      },
-      {
-        province: "Antsiranana",
-        regions: ["Diana", "Sava"],
-      },
-      {
-        province: "Fianarantsoa",
-        regions: [
-          "Amoron'i Mania",
-          "Atsimo-Atsinanana",
-          "Fitovinany",
-          "Haute Matsiatra",
-          "Ihorombe",
-          "Vatovavy",
-        ],
-      },
-      {
-        province: "Mahajanga",
-        regions: ["Betsiboka", "Boeny", "Melaky", "Sofia"],
-      },
-      {
-        province: "Toamasina",
-        regions: ["Alaotra Mangoro", "Analanjirofo", "Atsinanana"],
-      },
-      {
-        province: "Toliara",
-        regions: ["Androy", "Anosy", "Atsimo-Andrefana", "Menabe"],
-      },
-    ],
-    []
-  );
+  const getDisplayStatus = (status) => {
+    const statusMap = {
+      en_cours: "En cours",
+      investigation: "Investigation",
+      transmis_autorite: "Transmis aux autorités compétentes",
+      classifier: "Complété",
+      finalise: "Finalisé",
+    };
+    return statusMap[status] || status;
+  };
 
-  // Régions disponibles basées sur la province sélectionnée
-  const availableRegions = useMemo(() => {
-    if (!filters.province) {
-      return madagascarRegions
-        .flatMap((prov) => prov.regions)
-        .sort((a, b) => a.localeCompare(b));
-    }
-
-    const provinceData = madagascarRegions.find(
-      (p) => p.province === filters.province
-    );
-    return provinceData
-      ? provinceData.regions.sort((a, b) => a.localeCompare(b))
-      : [];
-  }, [filters.province, madagascarRegions]);
-
-  // Provinces disponibles triées par ordre alphabétique
-  const availableProvinces = useMemo(() => {
-    return madagascarRegions
-      .map((p) => p.province)
-      .sort((a, b) => a.localeCompare(b));
-  }, [madagascarRegions]);
-
-  // Fonction de tri
   const sortEnquetes = (enquetesToSort) => {
     if (!sortConfig.key) return enquetesToSort;
 
@@ -300,23 +261,19 @@ const EnquetesView = () => {
     });
   };
 
-  // Toutes les enquêtes triées
   const allEnquetes = useMemo(() => {
     return sortEnquetes([...enquetes]);
   }, [enquetes, sortConfig]);
 
-  // Filtrer les enquêtes
   const filteredEnquetes = useMemo(() => {
     let baseEnquetes = allEnquetes;
 
-    // Filtre par onglet
     if (currentTab !== "tous") {
       baseEnquetes = baseEnquetes.filter(
         (enquete) => enquete.statut.toLowerCase() === currentTab.toLowerCase()
       );
     }
 
-    // Filtre par recherche et localisation
     return baseEnquetes.filter((enquete) => {
       const matchSearch =
         !filters.search ||
@@ -328,15 +285,12 @@ const EnquetesView = () => {
           .includes(filters.search.toLowerCase()) ||
         enquete.categorie.toLowerCase().includes(filters.search.toLowerCase());
 
-      const matchProvince =
-        !filters.province || enquete.province === filters.province;
-      const matchRegion = !filters.region || enquete.region === filters.region;
+      const matchStatut = !filters.statut || enquete.status === filters.statut;
 
-      return matchSearch && matchProvince && matchRegion;
+      return matchSearch && matchStatut;
     });
   }, [allEnquetes, currentTab, filters]);
 
-  // Pagination
   const totalPages = Math.ceil(filteredEnquetes.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -345,7 +299,6 @@ const EnquetesView = () => {
     indexOfLastItem
   );
 
-  // Générer les numéros de page
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -386,7 +339,6 @@ const EnquetesView = () => {
     return pages;
   };
 
-  // Fonction pour gérer le tri
   const handleSort = (key) => {
     setSortConfig((current) => ({
       key,
@@ -396,7 +348,6 @@ const EnquetesView = () => {
     setCurrentPage(1);
   };
 
-  // Fonction pour obtenir l'icône de tri
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) {
       return <ArrowUpDown className="w-3 h-3 text-gray-400" />;
@@ -409,38 +360,18 @@ const EnquetesView = () => {
   };
 
   const handleFilterChange = (key, value) => {
-    setFilters((prev) => {
-      const newFilters = { ...prev, [key]: value };
-
-      if (key === "province" && value) {
-        const provinceData = madagascarRegions.find(
-          (p) => p.province === value
-        );
-        if (provinceData && provinceData.regions.length > 0) {
-          const sortedRegions = provinceData.regions.sort((a, b) =>
-            a.localeCompare(b)
-          );
-          newFilters.region = sortedRegions[0];
-        }
-      } else if (key === "province" && !value) {
-        newFilters.region = "";
-      }
-
-      return newFilters;
-    });
+    setFilters((prev) => ({ ...prev, [key]: value }));
     setCurrentPage(1);
   };
 
   const resetFilters = () => {
     setFilters({
       search: "",
-      province: "",
-      region: "",
+      statut: "",
     });
     setCurrentPage(1);
   };
 
-  // Fonctions de gestion des actions
   const handleViewEnquete = (enquete) => {
     setSelectedEnquete(selectedEnquete?.id === enquete.id ? null : enquete);
     setExpandedSections({
@@ -449,6 +380,14 @@ const EnquetesView = () => {
       description: true,
       pieces: true,
     });
+  };
+
+  const handleAssignEnquete = (enquete) => {
+    setSelectedEnqueteForAction(enquete);
+    setAssignData({
+      assignTo: enquete.assigned_to || "investigateur",
+    });
+    setShowAssignModal(true);
   };
 
   const handleStatusUpdate = (enquete) => {
@@ -464,36 +403,188 @@ const EnquetesView = () => {
     setShowDeleteModal(true);
   };
 
-  // Fonction pour confirmer la suppression
-  const confirmDeleteEnquete = () => {
-    if (selectedEnqueteForAction) {
-      console.log("Supprimer l'enquête:", selectedEnqueteForAction);
-      // TODO: appel API delete
-      setShowDeleteModal(false);
-      setSelectedEnqueteForAction(null);
+  const confirmDeleteEnquete = async () => {
+    if (!selectedEnqueteForAction) return;
+
+    try {
+      const enqueteId = selectedEnqueteForAction.id;
+      const response = await API.delete(`/reports/${enqueteId}`);
+
+      if (response.data.success) {
+        setShowDeleteModal(false);
+        setSelectedEnqueteForAction(null);
+
+        if (selectedEnquete?.id === enqueteId) {
+          setSelectedEnquete(null);
+        }
+
+        await fetchAssignedReports();
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        await fetchAssignedReports();
+        setShowDeleteModal(false);
+        setSelectedEnqueteForAction(null);
+      } else if (error.response?.status === 403) {
+        alert("❌ Vous n'avez pas les droits pour supprimer ce dossier");
+      } else {
+        alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+      }
     }
   };
 
-  // Soumission des formulaires
-  const handleStatusSubmit = (e) => {
+  const handleAssignSubmit = async (e) => {
     e.preventDefault();
-    console.log(
-      "Mettre à jour statut:",
-      selectedEnqueteForAction.id,
-      statusData
-    );
-    // TODO: Appel API pour mettre à jour le statut
-    setShowStatusModal(false);
+
+    if (!selectedEnqueteForAction) return;
+
+    try {
+      const response = await API.post(
+        `/reports/${selectedEnqueteForAction.id}/assign`,
+        {
+          assigned_to: assignData.assignTo,
+        }
+      );
+
+      if (response.data.success) {
+        alert("Dossier assigné avec succès!");
+        await fetchAssignedReports();
+        setShowAssignModal(false);
+        setSelectedEnqueteForAction(null);
+      }
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleStatusSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!selectedEnqueteForAction || !statusData.status) {
+      alert("Veuillez sélectionner un statut");
+      return;
+    }
+
+    try {
+      const response = await API.put(
+        `/reports/${selectedEnqueteForAction.id}/status`,
+        {
+          status: statusData.status,
+        }
+      );
+
+      if (response.data.success) {
+        alert(
+          `✅ Statut mis à jour avec succès !\nNouveau statut: ${getDisplayStatus(
+            statusData.status
+          )}`
+        );
+
+        setShowStatusModal(false);
+        setStatusData({
+          status: "",
+        });
+        setSelectedEnqueteForAction(null);
+
+        await fetchAssignedReports();
+      }
+    } catch (error) {
+      alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+    }
   };
 
   const generateReport = (e) => {
     e.preventDefault();
-    console.log("Générer rapport:", reportData);
-    // TODO: Implémenter la génération du rapport
-    setShowReportModal(false);
+
+    const selectedCategories =
+      reportData.categories.length > 0
+        ? categories
+            .filter((cat) => reportData.categories.includes(cat.id))
+            .map((cat) => cat.name)
+        : ["Toutes les catégories"];
+
+    const reportStats = {
+      total: filteredEnquetes.length,
+      en_cours: filteredEnquetes.filter((r) => r.status === "en_cours").length,
+      finalise: filteredEnquetes.filter((r) => r.status === "finalise").length,
+      investigation: filteredEnquetes.filter((r) => r.status === "investigation")
+        .length,
+      transmis_autorite: filteredEnquetes.filter(
+        (r) => r.status === "transmis_autorite"
+      ).length,
+      classifier: filteredEnquetes.filter((r) => r.status === "classifier")
+        .length,
+    };
+
+    const generatedReportData = {
+      type: reportData.type,
+      periode: `${formatDate(reportData.dateDebut)} - ${formatDate(
+        reportData.dateFin
+      )}`,
+      categories: selectedCategories,
+      notes: reportData.notes,
+      stats: reportStats,
+      dateGeneration: new Date().toLocaleDateString("fr-FR"),
+      heureGeneration: new Date().toLocaleTimeString("fr-FR"),
+    };
+
+    setGeneratedReport(generatedReportData);
+    setShowReportPreview(true);
   };
 
-  // Export CSV
+  const exportToPDF = () => {
+    const element = document.getElementById("report-preview");
+
+    html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+    })
+      .then((canvas) => {
+        const imgWidth = 210;
+        const pageHeight = 297;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        const pdf = new jsPDF("p", "mm", "a4");
+        let pageCount = 1;
+
+        let imgData = canvas.toDataURL("image/jpeg", 0.98);
+
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft >= 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+          pageCount++;
+        }
+
+        pdf.save(`rapport_dossiers_${generatedReport.dateGeneration}.pdf`);
+      })
+      .catch((error) => {
+        console.error("Erreur lors de la génération du PDF:", error);
+      });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   const exportEnquetes = () => {
     const csvContent = [
       [
@@ -502,17 +593,15 @@ const EnquetesView = () => {
         "Nom/Prénom",
         "Catégorie",
         "Statut",
-        "Province",
-        "Région",
+        "Assigné à",
       ],
       ...filteredEnquetes.map((enquete) => [
         enquete.reference,
         enquete.date,
         enquete.nom_prenom,
         enquete.categorie,
-        enquete.statut,
-        enquete.province,
-        enquete.region,
+        getDisplayStatus(enquete.status),
+        getDisplayAssignedTo(enquete.assigned_to),
       ]),
     ]
       .map((row) => row.map((field) => `"${field}"`).join(","))
@@ -535,7 +624,6 @@ const EnquetesView = () => {
     document.body.removeChild(link);
   };
 
-  // Fonctions pour les fichiers
   const handleDownloadFile = async (fileName) => {
     try {
       const encodedFileName = encodeURIComponent(fileName);
@@ -562,7 +650,6 @@ const EnquetesView = () => {
     window.open(fileUrl, "_blank");
   };
 
-  // Toggle sections
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -570,20 +657,20 @@ const EnquetesView = () => {
     }));
   };
 
-  // Statistiques par onglet
   const getTabStats = () => {
     return {
       tous: allEnquetes.length,
-      "en cours": allEnquetes.filter((e) => e.statut === "En cours").length,
-      "soumis bianco": allEnquetes.filter((e) => e.statut === "Soumis BIANCO").length,
-      complété: allEnquetes.filter((e) => e.statut === "Complété").length,
+      "en cours": allEnquetes.filter((e) => e.status === "en_cours").length,
+      "finalisé": allEnquetes.filter((e) => e.status === "finalise").length,
+      "complété": allEnquetes.filter((e) => e.status === "classifier").length,
+      investigation: allEnquetes.filter((e) => e.status === "investigation").length,
+      "transmis aux autorités compétentes": allEnquetes.filter((e) => e.status === "transmis_autorite").length,
     };
   };
 
   const tabStats = getTabStats();
 
-  // Si une enquête est sélectionnée, afficher la page de détail avec toggle
-  if (selectedEnquete) {
+  if (selectedEnquete && !generatedReport) {
     return (
       <>
         <div className="p-4 bg-white min-h-screen">
@@ -606,7 +693,6 @@ const EnquetesView = () => {
           </div>
 
           <div className="space-y-3">
-            {/* Informations Générales avec toggle */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("general")}
@@ -648,31 +734,23 @@ const EnquetesView = () => {
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-600 block mb-1">
-                        Province:
-                      </span>
-                      <p className="font-medium text-sm">
-                        {selectedEnquete.province}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 block mb-1">Région:</span>
-                      <p className="font-medium text-sm">{selectedEnquete.region}</p>
-                    </div>
-                    <div>
                       <span className="text-gray-600 block mb-1">Statut:</span>
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          selectedEnquete.statut === "En cours"
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          selectedEnquete.status === "en_cours"
                             ? "bg-yellow-100 text-yellow-800"
-                            : selectedEnquete.statut === "Soumis BIANCO"
-                            ? "bg-blue-100 text-blue-800"
-                            : selectedEnquete.statut === "Complété"
+                            : selectedEnquete.status === "finalise"
                             ? "bg-green-100 text-green-800"
+                            : selectedEnquete.status === "classifier"
+                            ? "bg-blue-100 text-blue-800"
+                            : selectedEnquete.status === "investigation"
+                            ? "bg-purple-100 text-purple-800"
+                            : selectedEnquete.status === "transmis_autorite"
+                            ? "bg-indigo-100 text-indigo-800"
                             : "bg-gray-100 text-gray-800"
                         }`}
                       >
-                        {selectedEnquete.statut}
+                        {getDisplayStatus(selectedEnquete.status)}
                       </span>
                     </div>
                     <div>
@@ -698,7 +776,6 @@ const EnquetesView = () => {
               )}
             </div>
 
-            {/* Informations de l'Auteur avec toggle */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("auteur")}
@@ -755,7 +832,6 @@ const EnquetesView = () => {
               )}
             </div>
 
-            {/* Description du Signalement avec toggle */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("description")}
@@ -782,7 +858,6 @@ const EnquetesView = () => {
               )}
             </div>
 
-            {/* Pièces Jointes avec toggle */}
             <div className="bg-white rounded-lg border border-gray-200">
               <button
                 onClick={() => toggleSection("pieces")}
@@ -891,15 +966,8 @@ const EnquetesView = () => {
             </div>
           </div>
 
-          <div className="flex justify-end items-center mt-6 pt-4 border-t">
+          <div className="flex justify-between items-center mt-6 pt-4 border-t">
             <div className="flex gap-2">
-              <button
-                onClick={() => handleStatusUpdate(selectedEnquete)}
-                className="flex items-center gap-1 px-3 py-1 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-              >
-                <Filter className="w-3 h-3" />
-                Statut
-              </button>
               <button
                 onClick={() => handleDeleteEnquete(selectedEnquete)}
                 className="flex items-center gap-1 px-3 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
@@ -908,10 +976,84 @@ const EnquetesView = () => {
                 Supprimer
               </button>
             </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleAssignEnquete(selectedEnquete)}
+                className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <UserCheck className="w-3 h-3" />
+                Assigner
+              </button>
+              <button
+                onClick={() => handleStatusUpdate(selectedEnquete)}
+                className="flex items-center gap-1 px-3 py-1 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+              >
+                <Filter className="w-3 h-3" />
+                Statut
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Modal Statut mis à jour */}
+        {showAssignModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-lg w-full max-w-md mx-4">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">
+                  Assigner le dossier
+                </h2>
+                <button
+                  onClick={() => setShowAssignModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAssignSubmit} className="p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Assigner à *
+                  </label>
+                  <select
+                    value={assignData.assignTo}
+                    onChange={(e) =>
+                      setAssignData((prev) => ({
+                        ...prev,
+                        assignTo: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  >
+                    {assignToOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowAssignModal(false)}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+                  >
+                    Assigner
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {showStatusModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
             <div className="bg-white rounded-lg w-full max-w-md mx-4">
@@ -942,13 +1084,12 @@ const EnquetesView = () => {
                     required
                   >
                     <option value="">Sélectionner un statut</option>
+                    <option value="en_cours">En cours</option>
                     <option value="investigation">Investigation</option>
                     <option value="transmis_autorite">
                       Transmis aux autorités compétentes
                     </option>
-                    <option value="refuse">Refusé</option>
-                    <option value="classifier">Classifié</option>
-                    <option value="en_cours">En cours</option>
+                    <option value="classifier">Complété</option>
                     <option value="finalise">Finalisé</option>
                   </select>
                 </div>
@@ -973,7 +1114,6 @@ const EnquetesView = () => {
           </div>
         )}
 
-        {/* Modal de Suppression */}
         {showDeleteModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
@@ -1053,46 +1193,443 @@ const EnquetesView = () => {
     );
   }
 
-  // Page principale avec la liste des enquêtes
+  if (showReportModal) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Génération de Rapport - Dossiers Assignés
+            </h1>
+            <p className="text-sm text-gray-600 mt-2">
+              Configurez et prévisualisez votre rapport des dossiers assignés
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowReportModal(false);
+                setShowReportPreview(false);
+                setGeneratedReport(null);
+              }}
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Retour à la liste
+            </button>
+            {generatedReport && (
+              <button
+                onClick={exportToPDF}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                <Download className="w-4 h-4" />
+                Exporter PDF
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Configuration du Rapport
+            </h2>
+
+            <form onSubmit={generateReport} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Type de rapport *
+                </label>
+                <select
+                  value={reportData.type}
+                  onChange={(e) =>
+                    setReportData({ ...reportData, type: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="quotidien">Quotidien</option>
+                  <option value="hebdomadaire">Hebdomadaire</option>
+                  <option value="mensuel">Mensuel</option>
+                  <option value="annuel">Annuel</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date de début *
+                  </label>
+                  <input
+                    type="date"
+                    value={reportData.dateDebut}
+                    onChange={(e) =>
+                      setReportData({
+                        ...reportData,
+                        dateDebut: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date de fin *
+                  </label>
+                  <input
+                    type="date"
+                    value={reportData.dateFin}
+                    onChange={(e) =>
+                      setReportData({ ...reportData, dateFin: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Catégories à inclure
+                </label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
+                  {categories.map((cat) => (
+                    <label key={cat.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reportData.categories.includes(cat.id)}
+                        onChange={(e) => {
+                          const newCategories = e.target.checked
+                            ? [...reportData.categories, cat.id]
+                            : reportData.categories.filter(
+                                (id) => id !== cat.id
+                              );
+                          setReportData({
+                            ...reportData,
+                            categories: newCategories,
+                          });
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">
+                        {cat.emoji} {cat.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Laissez vide pour inclure toutes les catégories
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes et observations
+                </label>
+                <textarea
+                  value={reportData.notes}
+                  onChange={(e) =>
+                    setReportData({ ...reportData, notes: e.target.value })
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Ajoutez des commentaires ou observations..."
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                Générer le Rapport
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Prévisualisation du Rapport
+            </h2>
+
+            {showReportPreview && generatedReport ? (
+              <div id="report-preview" className="pdf-export bg-white p-8">
+                <div className="text-center border-b-2 border-gray-800 pb-6 mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="text-left">
+                      <img
+                        src={repLogo}
+                        alt="République de Madagascar"
+                        className="h-16 object-contain"
+                      />
+                      <p className="text-xs font-bold text-gray-800 mt-1">
+                        REPOBLIKAN'I MADAGASIKARA
+                      </p>
+                    </div>
+
+                    <div className="text-center flex-1 mx-8">
+                      <div className="border-l border-r border-gray-400 px-8">
+                        <img
+                          src={mesupresLogo}
+                          alt="MESUPRES"
+                          className="h-16 object-contain mx-auto"
+                        />
+                        <p className="text-xs font-bold text-gray-800 mt-1 uppercase">
+                          MINISTERAN'NY FAMPIANARANA AMBONY SY FIKAROHANA
+                          ARA-TSIANSA
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <img
+                        src={fosikaLogo}
+                        alt="FOSIKA"
+                        className="h-16 object-contain ml-auto"
+                      />
+                      <p className="text-xs font-bold text-gray-800 mt-1">
+                        FOSIKA
+                      </p>
+                    </div>
+                  </div>
+
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2 uppercase">
+                    Rapport des Dossiers Assignés
+                  </h1>
+                  <p className="text-lg font-semibold text-gray-700">
+                    {generatedReport.type.charAt(0).toUpperCase() +
+                      generatedReport.type.slice(1)}{" "}
+                    - {generatedReport.periode}
+                  </p>
+                </div>
+
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
+                    Informations Générales
+                  </h2>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Type de rapport:</span>
+                      <span className="capitalize">{generatedReport.type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Période couverte:</span>
+                      <span>{generatedReport.periode}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">
+                        Catégories incluses:
+                      </span>
+                      <span className="text-right">
+                        {generatedReport.categories.length > 0
+                          ? generatedReport.categories.join(", ")
+                          : "Toutes les catégories"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Date de génération:</span>
+                      <span>
+                        {generatedReport.dateGeneration} à{" "}
+                        {generatedReport.heureGeneration}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
+                    Statistiques des Dossiers Assignés
+                  </h2>
+                  <div className="space-y-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Total des dossiers assignés:</span>
+                      <span className="font-bold">
+                        {generatedReport.stats.total}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Dossiers en cours:</span>
+                      <span className="font-bold text-amber-600">
+                        {generatedReport.stats.en_cours}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Dossiers finalisés:</span>
+                      <span className="font-bold text-green-600">
+                        {generatedReport.stats.finalise}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>En investigation:</span>
+                      <span className="font-bold text-purple-600">
+                        {generatedReport.stats.investigation}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span>Transmis aux autorités compétentes:</span>
+                      <span className="font-bold text-indigo-600">
+                        {generatedReport.stats.transmis_autorite}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Dossiers complétés:</span>
+                      <span className="font-bold text-blue-600">
+                        {generatedReport.stats.classifier}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">
+                    Analyse
+                  </h2>
+                  <div className="space-y-4 text-sm leading-relaxed">
+                    <p>
+                      Le présent rapport d'activité du système FOSIKA couvre la
+                      période du <strong> {generatedReport.periode} </strong>
+                      et présente une analyse exhaustive des dossiers assignés
+                      concernant les irrégularités dans le secteur de
+                      l'enseignement supérieur et de la recherche scientifique.
+                    </p>
+
+                    <p>
+                      Durant cette période,{" "}
+                      <strong>
+                        {generatedReport.stats.total} dossiers assignés
+                      </strong>{" "}
+                      ont été traités par notre système. La répartition par statut
+                      démontre l'avancement des investigations :
+                    </p>
+
+                    <ul className="list-disc list-inside space-y-2 ml-4">
+                      <li>
+                        <strong>
+                          {generatedReport.stats.en_cours} dossiers
+                        </strong>{" "}
+                        sont actuellement en cours d'instruction active
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.finalise} affaires
+                        </strong>{" "}
+                        ont été résolues avec succès
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.investigation} cas
+                        </strong>{" "}
+                        font l'objet d'une investigation approfondie
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.transmis_autorite} dossiers
+                        </strong>{" "}
+                        ont été transmis aux autorités compétentes
+                      </li>
+                      <li>
+                        <strong>
+                          {generatedReport.stats.classifier} dossiers
+                        </strong>{" "}
+                        ont été complétés et classés
+                      </li>
+                    </ul>
+
+                    <p>
+                      Le système FOSIKA continue de démontrer son efficacité dans
+                      le traitement des dossiers assignés et le suivi des
+                      investigations. Notre plateforme assure un suivi rigoureux
+                      de chaque dossier depuis son assignation jusqu'à sa
+                      résolution définitive.
+                    </p>
+
+                    {generatedReport.notes && (
+                      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mt-4">
+                        <h3 className="font-bold text-blue-900 mb-2">
+                          Observations particulières :
+                        </h3>
+                        <p className="text-blue-800 whitespace-pre-wrap text-sm">
+                          {generatedReport.notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t-2 border-gray-800 text-center text-xs text-gray-600">
+                  <p className="font-bold">
+                    © DAAQ-MESUPRES 2025 - Tous droits réservés
+                  </p>
+                  <p className="mt-1">
+                    Système FOSIKA - Plateforme de gestion des dossiers assignés
+                  </p>
+                  <p className="mt-2">
+                    Document généré le {generatedReport.dateGeneration} à{" "}
+                    {generatedReport.heureGeneration}
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    À usage officiel - Confidentiel
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">
+                  Le rapport apparaîtra ici après génération
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Configurez les paramètres et cliquez sur "Générer le Rapport"
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">
-            Signalements à enquêter
+          <h1 className="text-base font-semibold">
+            {currentTab === "classifier"
+              ? "Dossiers complétés"
+              : "Dossiers à enquêter"}
           </h1>
-          <p className="text-gray-600 text-sm">
-            Gérez et suivez vos dossiers d'enquête
+          <p className="text-xs text-gray-500">
+            {currentTab === "classifier"
+              ? "Dossiers ayant déjà été complétés."
+              : "Gérez et suivez vos dossiers d'enquête assignés"}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={exportEnquetes}
-            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1 px-3 py-1 text-xs border rounded-md hover:bg-gray-50"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3 h-3" />
             Exporter CSV
           </button>
 
           <button
             onClick={() => setShowReportModal(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1 px-3 py-1 text-xs border rounded-md hover:bg-gray-50"
           >
-            <FileText className="w-4 h-4" />
+            <FileText className="w-3 h-3" />
             Générer rapport
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-1 mb-3">
+      <div className="flex flex-wrap gap-2 mb-3">
         <button
           className={
             currentTab === "tous"
-              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
-              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              ? "px-3 py-1 text-xs rounded-full bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
           }
           onClick={() => {
             setCurrentTab("tous");
@@ -1105,8 +1642,8 @@ const EnquetesView = () => {
         <button
           className={
             currentTab === "en cours"
-              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
-              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              ? "px-3 py-1 text-xs rounded-full bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
           }
           onClick={() => {
             setCurrentTab("en cours");
@@ -1118,110 +1655,116 @@ const EnquetesView = () => {
 
         <button
           className={
-            currentTab === "soumis bianco"
-              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
-              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+            currentTab === "finalisé"
+              ? "px-3 py-1 text-xs rounded-full bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
           }
           onClick={() => {
-            setCurrentTab("soumis bianco");
+            setCurrentTab("finalisé");
             setCurrentPage(1);
           }}
         >
-          Soumis BIANCO ({tabStats["soumis bianco"]})
+          Finalisé ({tabStats["finalisé"]})
         </button>
 
         <button
           className={
             currentTab === "complété"
-              ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white"
-              : "px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              ? "px-3 py-1 text-xs rounded-full bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
           }
           onClick={() => {
             setCurrentTab("complété");
             setCurrentPage(1);
           }}
         >
-          Complété ({tabStats.complété})
+          Complété ({tabStats["complété"]})
+        </button>
+
+        <button
+          className={
+            currentTab === "investigation"
+              ? "px-3 py-1 text-xs rounded-full bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
+          }
+          onClick={() => {
+            setCurrentTab("investigation");
+            setCurrentPage(1);
+          }}
+        >
+          Investigation ({tabStats.investigation})
+        </button>
+
+        <button
+          className={
+            currentTab === "transmis aux autorités compétentes"
+              ? "px-3 py-1 text-xs rounded-full bg-blue-600 text-white"
+              : "px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
+          }
+          onClick={() => {
+            setCurrentTab("transmis aux autorités compétentes");
+            setCurrentPage(1);
+          }}
+        >
+          Transmis ({tabStats["transmis aux autorités compétentes"]})
         </button>
       </div>
 
-      {/* Filtres */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
         <div className="md:col-span-2">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3" />
-            <input
-              type="text"
-              value={filters.search}
-              onChange={(e) => handleFilterChange("search", e.target.value)}
-              placeholder="Rechercher par référence, nom ou catégorie..."
-              className="w-full pl-7 pr-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+          <input
+            type="text"
+            value={filters.search}
+            onChange={(e) => handleFilterChange("search", e.target.value)}
+            placeholder="Rechercher par référence, nom..."
+            className="w-full px-2 py-1 text-xs border rounded-md"
+          />
         </div>
 
         <div>
           <select
-            value={filters.province}
-            onChange={(e) => handleFilterChange("province", e.target.value)}
-            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            value={filters.statut}
+            onChange={(e) => handleFilterChange("statut", e.target.value)}
+            className="w-full px-2 py-1 text-xs border rounded-md"
           >
-            <option value="">Toutes les provinces</option>
-            {availableProvinces.map((province) => (
-              <option key={province} value={province}>
-                {province}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <select
-            value={filters.region}
-            onChange={(e) => handleFilterChange("region", e.target.value)}
-            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Toutes les régions</option>
-            {availableRegions.map((region) => (
-              <option key={region} value={region}>
-                {region}
-              </option>
-            ))}
+            <option value="">Tous les statuts</option>
+            <option value="en_cours">En cours</option>
+            <option value="finalise">Finalisé</option>
+            <option value="classifier">Complété</option>
+            <option value="investigation">Investigation</option>
+            <option value="transmis_autorite">Transmis aux autorités</option>
           </select>
         </div>
       </div>
 
-      {/* Bouton reset filtres + info compte */}
       <div className="flex items-center justify-between mb-2 text-xs">
         <button
           onClick={resetFilters}
-          className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-1 px-2 py-1 border rounded-md hover:bg-gray-50"
         >
           <X className="w-3 h-3" />
           Réinitialiser les filtres
         </button>
-        <div className="text-gray-500 text-xs">
+        <div className="text-gray-500">
           {filteredEnquetes.length} dossiers trouvés
         </div>
       </div>
 
-      {/* Tableau des enquêtes */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border rounded-md overflow-hidden">
         <div className="overflow-x-auto">
           {isLoading ? (
-            <div className="p-4 text-center text-gray-500 text-sm">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              Chargement des dossiers assignés...
+            <div className="p-4 text-center text-xs text-gray-500">
+              Chargement en cours...
             </div>
           ) : filteredEnquetes.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 text-sm">
-              Aucun dossier assigné trouvé avec les filtres actuels
+            <div className="p-4 text-center text-xs text-gray-500">
+              Aucun dossier trouvé avec les filtres actuels
             </div>
           ) : (
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-xs">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left">
                     <button
                       onClick={() => handleSort("reference")}
                       className="flex items-center gap-1 hover:text-blue-600 transition-colors"
@@ -1230,7 +1773,7 @@ const EnquetesView = () => {
                       {getSortIcon("reference")}
                     </button>
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left">
                     <button
                       onClick={() => handleSort("date")}
                       className="flex items-center gap-1 hover:text-blue-600 transition-colors"
@@ -1239,54 +1782,57 @@ const EnquetesView = () => {
                       {getSortIcon("date")}
                     </button>
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nom / Prénom
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Catégorie
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-2 py-2 text-left">NOM / PRÉNOM</th>
+                  <th className="px-2 py-2 text-left">CATÉGORIE</th>
+                  <th className="px-2 py-2 text-left">STATUT</th>
+                  <th className="px-2 py-2 text-left">ASSIGNÉ À</th>
+                  <th className="px-2 py-2 text-left">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {paginatedEnquetes.map((enquete) => (
-                  <tr
-                    key={enquete.id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-3 py-2 whitespace-nowrap font-medium text-blue-600 text-xs">
+                  <tr key={enquete.id} className="border-t hover:bg-gray-50">
+                    <td className="px-2 py-2 font-medium">
                       {enquete.reference}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
-                      {enquete.date}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
-                      {enquete.nom_prenom}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
-                      {enquete.categorie}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-2">{enquete.date}</td>
+                    <td className="px-2 py-2">{enquete.nom_prenom}</td>
+                    <td className="px-2 py-2">{enquete.categorie}</td>
+                    <td className="px-2 py-2">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          enquete.statut === "En cours"
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          enquete.status === "en_cours"
                             ? "bg-yellow-100 text-yellow-800"
-                            : enquete.statut === "Soumis BIANCO"
-                            ? "bg-blue-100 text-blue-800"
-                            : enquete.statut === "Complété"
+                            : enquete.status === "finalise"
                             ? "bg-green-100 text-green-800"
+                            : enquete.status === "classifier"
+                            ? "bg-blue-100 text-blue-800"
+                            : enquete.status === "investigation"
+                            ? "bg-purple-100 text-purple-800"
+                            : enquete.status === "transmis_autorite"
+                            ? "bg-indigo-100 text-indigo-800"
                             : "bg-gray-100 text-gray-800"
                         }`}
                       >
-                        {enquete.statut}
+                        {getDisplayStatus(enquete.status)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-2">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          enquete.assigned_to === "investigateur"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : enquete.assigned_to === "cac_daj"
+                            ? "bg-blue-100 text-blue-800"
+                            : enquete.assigned_to === "autorite_competente"
+                            ? "bg-cyan-100 text-cyan-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {getDisplayAssignedTo(enquete.assigned_to)}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleViewEnquete(enquete)}
@@ -1294,6 +1840,13 @@ const EnquetesView = () => {
                           title="Voir détails"
                         >
                           <Eye className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleAssignEnquete(enquete)}
+                          className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                          title="Assigner"
+                        >
+                          <UserCheck className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => handleStatusUpdate(enquete)}
@@ -1318,18 +1871,17 @@ const EnquetesView = () => {
           )}
         </div>
 
-        {/* Pagination */}
         {filteredEnquetes.length > 0 && (
-          <div className="flex items-center justify-between px-3 py-2 border-t bg-gray-50">
+          <div className="flex items-center justify-between px-2 py-2 border-t bg-gray-50">
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-700">Éléments par page :</span>
+              <span>Éléments par page :</span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="px-2 py-1 border border-gray-300 rounded text-xs"
+                className="px-2 py-1 border rounded-md text-xs"
               >
                 <option value={10}>10</option>
                 <option value={30}>30</option>
@@ -1347,16 +1899,16 @@ const EnquetesView = () => {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-1 border border-gray-300 rounded disabled:opacity-50 hover:bg-gray-100"
+                className="p-1 border rounded-md disabled:opacity-50"
               >
-                <ChevronLeft className="w-3 h-3" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
 
               {getPageNumbers().map((page, idx) =>
                 page === "..." ? (
                   <span
                     key={`ellipsis-${idx}`}
-                    className="px-1 text-xs text-gray-500"
+                    className="px-2 text-xs text-gray-500"
                   >
                     ...
                   </span>
@@ -1364,10 +1916,10 @@ const EnquetesView = () => {
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`px-2 py-1 text-xs border rounded ${
+                    className={`px-2 py-1 text-xs border rounded-md ${
                       currentPage === page
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white border-gray-300"
+                        ? "bg-blue-600 text-white"
+                        : "bg-white"
                     }`}
                   >
                     {page}
@@ -1380,16 +1932,72 @@ const EnquetesView = () => {
                   setCurrentPage((p) => Math.min(totalPages, p + 1))
                 }
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-1 border border-gray-300 rounded disabled:opacity-50 hover:bg-gray-100"
+                className="p-1 border rounded-md disabled:opacity-50"
               >
-                <ChevronRight className="w-3 h-3" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Modal Statut mis à jour */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Assigner le dossier</h2>
+              <button
+                onClick={() => setShowAssignModal(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAssignSubmit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assigner à *
+                </label>
+                <select
+                  value={assignData.assignTo}
+                  onChange={(e) =>
+                    setAssignData((prev) => ({
+                      ...prev,
+                      assignTo: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  {assignToOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowAssignModal(false)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Assigner
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showStatusModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md mx-4">
@@ -1420,13 +2028,12 @@ const EnquetesView = () => {
                   required
                 >
                   <option value="">Sélectionner un statut</option>
+                  <option value="en_cours">En cours</option>
                   <option value="investigation">Investigation</option>
                   <option value="transmis_autorite">
                     Transmis aux autorités compétentes
                   </option>
-                  <option value="refuse">Refusé</option>
-                  <option value="classifier">Classifié</option>
-                  <option value="en_cours">En cours</option>
+                  <option value="classifier">Complété</option>
                   <option value="finalise">Finalisé</option>
                 </select>
               </div>
@@ -1451,7 +2058,6 @@ const EnquetesView = () => {
         </div>
       )}
 
-      {/* Modal de Suppression Moderne */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
@@ -1465,7 +2071,7 @@ const EnquetesView = () => {
                     Confirmer la suppression
                   </h2>
                   <p className="text-red-100 text-sm">Action irréversible</p>
-                </div>
+                  </div>
               </div>
             </div>
 
@@ -1524,97 +2130,6 @@ const EnquetesView = () => {
                 Supprimer définitivement
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Générer rapport */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg w-full max-w-md mx-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Générer un rapport</h2>
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={generateReport} className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type de rapport *
-                </label>
-                <select
-                  value={reportData.type}
-                  onChange={(e) =>
-                    setReportData((prev) => ({ ...prev, type: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                  required
-                >
-                  <option value="quotidien">Quotidien</option>
-                  <option value="hebdomadaire">Hebdomadaire</option>
-                  <option value="mensuel">Mensuel</option>
-                  <option value="personnalise">Personnalisé</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date début *
-                  </label>
-                  <input
-                    type="date"
-                    value={reportData.dateDebut}
-                    onChange={(e) =>
-                      setReportData((prev) => ({
-                        ...prev,
-                        dateDebut: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date fin *
-                  </label>
-                  <input
-                    type="date"
-                    value={reportData.dateFin}
-                    onChange={(e) =>
-                      setReportData((prev) => ({
-                        ...prev,
-                        dateFin: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowReportModal(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Générer rapport
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

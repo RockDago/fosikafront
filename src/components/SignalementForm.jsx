@@ -239,6 +239,7 @@ const translations = {
     required: "*",
   },
 };
+
 // Composant Page d'accueil avec design responsive - Desktop inchangé
 const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
   const t = translations[language];
@@ -410,7 +411,7 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
             <img
               src={LogoFosika}
               alt="Logo Fosika"
-              className="h-32 w-auto object-contain"
+              className="h-20 w-auto object-contain"
             />
           </div>
 
@@ -455,9 +456,7 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
               {/* ZONE TEXTE AVEC TEXTE RÉDUIT SUR MOBILE - HAUTEUR AUTOMATIQUE SUR DESKTOP */}
               <div className="text-gray-700 text-xs md:text-sm lg:text-base leading-relaxed mb-4 md:mb-6 max-h-[300px] md:max-h-[250px] lg:max-h-none overflow-y-auto pr-2 md:pr-3 pl-1 md:pl-2 scrollable-text">
                 {/* Premier paragraphe avec texte justifié */}
-                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
-                  {t.welcome.title}
-                </p>
+                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">{t.welcome.title}</p>
 
                 {/* Deuxième paragraphe avec texte justifié */}
                 <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
@@ -560,6 +559,8 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
     </div>
   );
 };
+
+// Composant Choix isolé - SANS BOUTON DE LANGUE
 const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
   const t = translations[language];
 
@@ -692,6 +693,7 @@ const ChoiceStep = ({ language, setStep, setIsAnonymous }) => {
   );
 };
 
+// NOUVEAU COMPOSANT : Étape de choix des preuves
 const ProofStep = ({ language, setStep, setHasProof, isAnonymous }) => {
   const t = translations[language];
 
@@ -844,6 +846,7 @@ const ProofStep = ({ language, setStep, setHasProof, isAnonymous }) => {
   );
 };
 
+// Composant Informations personnelles isolé - SANS BOUTON DE LANGUE
 const PersonalInfoStep = ({
   language,
   formData,
@@ -1068,6 +1071,7 @@ const PersonalInfoStep = ({
   );
 };
 
+// Composant Catégorie isolé - SANS BOUTON DE LANGUE
 const CategoryStep = ({
   language,
   selectedCategory,
@@ -1328,6 +1332,7 @@ const CategoryStep = ({
   );
 };
 
+// Composant Upload isolé - SANS BOUTON DE LANGUE
 const UploadStep = ({
   language,
   formData,
@@ -1634,6 +1639,7 @@ const UploadStep = ({
   );
 };
 
+// Composant Success isolé - SANS BOUTON DE LANGUE
 const SuccessPage = ({ language, referenceCode, resetForm, navigate }) => {
   const t = translations[language];
   const Asset8 = new URL("../assets/images/Asset 8.png", import.meta.url).href;
@@ -1754,7 +1760,7 @@ const SignalementForm = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [isAnonymous, setIsAnonymous] = useState(null);
-  const [hasProof, setHasProof] = useState(null); // NOUVEAU ÉTAT
+  const [hasProof, setHasProof] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [language, setLanguage] = useState("fr");
   const [formData, setFormData] = useState({
@@ -1855,7 +1861,7 @@ const SignalementForm = () => {
     });
     setSelectedCategory("");
     setIsAnonymous(null);
-    setHasProof(null); // RÉINITIALISER
+    setHasProof(null);
     setErrors({});
   };
 
@@ -1891,7 +1897,6 @@ const SignalementForm = () => {
     );
   }
 
-  // NOUVELLE ÉTAPE : Choix des preuves
   if (step === 2) {
     return (
       <ProofStep
@@ -1930,7 +1935,7 @@ const SignalementForm = () => {
         setErrors={setErrors}
         setStep={setStep}
         hasProof={hasProof}
-        setReferenceCode={setReferenceCode} // ✅ CORRECTION : Ajout de setReferenceCode
+        setReferenceCode={setReferenceCode}
       />
     );
   }
@@ -1948,7 +1953,7 @@ const SignalementForm = () => {
         isSubmitting={isSubmitting}
         setStep={setStep}
         handleSubmit={handleSubmit}
-        hasProof={hasProof} // ✅ BIEN PASSÉ ICI
+        hasProof={hasProof}
       />
     );
   }

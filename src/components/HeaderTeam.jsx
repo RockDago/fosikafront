@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Bell,
   ChevronDown,
-  X,
   FileText,
   AlertTriangle,
   CheckCircle,
@@ -54,71 +53,8 @@ const HeaderTeam = ({
 
   const currentRole = roleColors[userRole] || roleColors.admin;
 
-  useEffect(() => {
-    fetchUserProfile();
-  }, [userData, avatarVersion]);
-
-  useEffect(() => {
-    fetchRecentNotifications();
-    const interval = setInterval(fetchRecentNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Dans HeaderTeam.jsx, mettre à jour fetchRecentNotifications :
-
-  const fetchRecentNotifications = async () => {
-    try {
-      const token =
-        localStorage.getItem(`${userRole}_token`) ||
-        sessionStorage.getItem(`${userRole}_token`);
-      if (!token) return;
-
-      // Utiliser la nouvelle route par rôle
-      const response = await API.get("/notifications/recent-by-role", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.data.success) {
-        setRecentNotifications(response.data.data || []);
-        setUnreadCount(
-          response.data.data?.filter((n) => n.status === "active").length || 0
-        );
-      }
-    } catch (error) {
-      console.error("Erreur chargement notifications récentes:", error);
-    }
-  };
-  const markNotificationAsRead = async (notificationId) => {
-    try {
-      const token =
-        localStorage.getItem(`${userRole}_token`) ||
-        sessionStorage.getItem(`${userRole}_token`);
-      const response = await API.post(
-        `/notifications/${notificationId}/read`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.status === 200) {
-        setRecentNotifications((prev) =>
-          prev.map((notif) =>
-            notif.id === notificationId ? { ...notif, status: "read" } : notif
-          )
-        );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-      }
-    } catch (error) {
-      console.error("Erreur marquer comme lu:", error);
-    }
-  };
-
-  const fetchUserProfile = async () => {
+  // Mémoriser fetchUserProfile pour éviter les dépendances circulaires
+  const fetchUserProfile = useCallback(async () => {
     try {
       const token =
         localStorage.getItem(`${userRole}_token`) ||
@@ -150,7 +86,87 @@ const HeaderTeam = ({
     } catch (error) {
       console.error(`Error loading ${userRole} profile:`, error);
     }
+  }, [userRole, onAvatarUpdate]);
+
+  // Charger les données une seule fois au montage
+  useEffect(() => {
+    fetchUserProfile();
+  }, [fetchUserProfile]);
+
+  // Réagir aux changements d'userData
+  useEffect(() => {
+    if (userData) {
+      setLocalUserData(userData);
+    }
+  }, [userData]);
+
+  // Rafraîchir les données quand avatarVersion change
+  useEffect(() => {
+    if (avatarVersion > 0) {
+      fetchUserProfile();
+    }
+  }, [avatarVersion, fetchUserProfile]);
+
+  // Dans HeaderTeam.jsx, mettre à jour fetchRecentNotifications :
+
+  const fetchRecentNotifications = useCallback(async () => {
+    try {
+      const token =
+        localStorage.getItem(`${userRole}_token`) ||
+        sessionStorage.getItem(`${userRole}_token`);
+      if (!token) return;
+
+      // Utiliser la nouvelle route par rôle
+      const response = await API.get("/notifications/recent-by-role", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        setRecentNotifications(response.data.data || []);
+        setUnreadCount(
+          response.data.data?.filter((n) => n.status === "active").length || 0
+        );
+      }
+    } catch (error) {
+      console.error("Erreur chargement notifications récentes:", error);
+    }
+  }, [userRole]);
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      const token =
+        localStorage.getItem(`${userRole}_token`) ||
+        sessionStorage.getItem(`${userRole}_token`);
+      const response = await API.post(
+        `/notifications/${notificationId}/read`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.status === 200) {
+        setRecentNotifications((prev) =>
+          prev.map((notif) =>
+            notif.id === notificationId ? { ...notif, status: "read" } : notif
+          )
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Erreur marquer comme lu:", error);
+    }
   };
+
+  // Charger les notifications récentes
+  useEffect(() => {
+    fetchRecentNotifications();
+    const interval = setInterval(fetchRecentNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchRecentNotifications]);
 
   const getTypeIcon = (type) => {
     switch (type) {

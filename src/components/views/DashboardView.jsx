@@ -14,7 +14,6 @@ const chartColors = [
 ];
 
 // Couleurs pour le diagramme circulaire
-// Couleurs pour le doughnut: palette réduite et discrète
 const pieColors = [
   "#2B6CB0",
   "#6B7280",
@@ -84,7 +83,8 @@ export default function DashboardView() {
   const [globalStats, setGlobalStats] = useState({
     total: 0,
     en_cours: 0,
-    resolus: 0,
+    soumis_bianco: 0,
+    enquetes_completees: 0,
   });
   const [monthTotal, setMonthTotal] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -92,8 +92,6 @@ export default function DashboardView() {
   useEffect(() => {
     initializeCategoriesWithZero();
     fetchDashboardData();
-
-    // Suppression de l'auto-refresh
   }, []);
 
   useEffect(() => {
@@ -111,7 +109,8 @@ export default function DashboardView() {
         ...category,
         total: 0,
         encours: 0,
-        resolus: 0,
+        soumis_bianco: 0,
+        enquetes_completees: 0,
         color: chartColors[index],
       })
     );
@@ -140,11 +139,17 @@ export default function DashboardView() {
             ...cat,
             total: 0,
             encours: 0,
-            resolus: 0,
+            soumis_bianco: 0,
+            enquetes_completees: 0,
           }))
         );
         setRecentReports([]);
-        setGlobalStats({ total: 0, en_cours: 0, resolus: 0 });
+        setGlobalStats({
+          total: 0,
+          en_cours: 0,
+          soumis_bianco: 0,
+          enquetes_completees: 0,
+        });
         setMonthTotal(0);
       }
     } catch (error) {
@@ -177,7 +182,10 @@ export default function DashboardView() {
 
     const total = reports.length;
     const en_cours = reports.filter((r) => r.status === "en_cours").length;
-    const finalise = reports.filter((r) => r.status === "finalise").length;
+    const soumis_bianco = reports.filter((r) => r.status === "finalise").length;
+    const enquetes_completees = reports.filter(
+      (r) => r.status === "classifier"
+    ).length;
 
     const by_category = {};
     defaultCategoryStructure.forEach((cat) => {
@@ -185,16 +193,23 @@ export default function DashboardView() {
       by_category[cat.id] = categoryReports.length;
     });
 
-    const statsData = { total, en_cours, finalise, by_category };
+    const statsData = {
+      total,
+      en_cours,
+      soumis_bianco,
+      enquetes_completees,
+      by_category,
+    };
     updateGlobalStats(statsData);
-    updateCategoriesWithRealData(statsData, reports); // Passer les reports ici
+    updateCategoriesWithRealData(statsData, reports);
   };
 
   const updateGlobalStats = (statsData) => {
     setGlobalStats({
       total: statsData.total || 0,
       en_cours: statsData.en_cours || 0,
-      resolus: statsData.finalise || 0,
+      soumis_bianco: statsData.soumis_bianco || 0,
+      enquetes_completees: statsData.enquetes_completees || 0,
     });
   };
 
@@ -209,15 +224,19 @@ export default function DashboardView() {
       const encours = categoryReports.filter(
         (report) => report.status === "en_cours"
       ).length;
-      const resolus = categoryReports.filter(
+      const soumis_bianco = categoryReports.filter(
         (report) => report.status === "finalise"
+      ).length;
+      const enquetes_completees = categoryReports.filter(
+        (report) => report.status === "classifier"
       ).length;
 
       return {
         ...category,
         total: realTotal,
         encours,
-        resolus,
+        soumis_bianco,
+        enquetes_completees,
       };
     });
     setCategories(updatedCategories);
@@ -277,7 +296,8 @@ export default function DashboardView() {
   const getStatusText = (status) => {
     const statusMap = {
       en_cours: "En cours",
-      finalise: "Résolu",
+      finalise: "Soumis BIANCO",
+      classifier: "Complété",
       doublon: "Doublon",
       refuse: "Refusé",
     };
@@ -831,18 +851,18 @@ export default function DashboardView() {
             </div>
           </div>
 
-          {/* Résolus */}
+          {/* Soumis à la BIANCO */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Résolus</p>
-                <p className="text-2xl font-bold text-green-600 mt-2">
-                  {globalStats.resolus}
+                <p className="text-sm text-gray-600">Soumis à la BIANCO</p>
+                <p className="text-2xl font-bold text-purple-600 mt-2">
+                  {globalStats.soumis_bianco}
                 </p>
               </div>
-              <div className="bg-green-100 rounded-full p-3">
+              <div className="bg-purple-100 rounded-full p-3">
                 <svg
-                  className="w-8 h-8 text-green-600"
+                  className="w-8 h-8 text-purple-600"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -858,18 +878,18 @@ export default function DashboardView() {
             </div>
           </div>
 
-          {/* Total du mois */}
+          {/* Enquêtes complétées */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Ce mois</p>
-                <p className="text-2xl font-bold text-purple-600 mt-2">
-                  {monthTotal}
+                <p className="text-sm text-gray-600">Enquêtes complétées</p>
+                <p className="text-2xl font-bold text-green-600 mt-2">
+                  {globalStats.enquetes_completees}
                 </p>
               </div>
-              <div className="bg-purple-100 rounded-full p-3">
+              <div className="bg-green-100 rounded-full p-3">
                 <svg
-                  className="w-8 h-8 text-purple-600"
+                  className="w-8 h-8 text-green-600"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -878,7 +898,7 @@ export default function DashboardView() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    d="M5 13l4 4L19 7"
                   />
                 </svg>
               </div>
@@ -905,7 +925,12 @@ export default function DashboardView() {
               <p className="text-sm text-gray-500 mb-3">{cat.subtitle}</p>
               <div className="flex justify-between text-sm">
                 <span className="text-orange-600">En cours: {cat.encours}</span>
-                <span className="text-green-600">Résolus: {cat.resolus}</span>
+                <span className="text-purple-600">
+                  Soumis BIANCO: {cat.soumis_bianco}
+                </span>
+                <span className="text-green-600">
+                  Complétés: {cat.enquetes_completees}
+                </span>
               </div>
             </div>
           ))}
@@ -1048,7 +1073,9 @@ export default function DashboardView() {
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
                           report.state === "En cours"
                             ? "bg-orange-100 text-orange-800"
-                            : report.state === "Résolu"
+                            : report.state === "Soumis BIANCO"
+                            ? "bg-purple-100 text-purple-800"
+                            : report.state === "Complété"
                             ? "bg-green-100 text-green-800"
                             : "bg-gray-100 text-gray-800"
                         }`}

@@ -1,5 +1,4 @@
-// DashboardInvest.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import API from "../config/axios";
 import HeaderTeam from "./HeaderTeam";
 import SidebarInvest from "./SidebarInvest";
@@ -15,16 +14,33 @@ const DashboardInvest = ({ onDeconnexion }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [investData, setInvestData] = useState(null);
   const [avatarUpdated, setAvatarUpdated] = useState(0);
-  const [headerAvatarUpdate, setHeaderAvatarUpdate] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Gestion de la session expirée
+  const handleSessionExpired = useCallback(() => {
+    teamUtils.logout("investigateur");
+    setIsAuthenticated(false);
+
+    setTimeout(() => {
+      alert("Votre session a expiré. Vous allez être redirigé.");
+    }, 100);
+
+    if (onDeconnexion) {
+      onDeconnexion();
+    }
+  }, [onDeconnexion]);
 
   // Vérifier l'authentification au chargement
   useEffect(() => {
     const checkAuth = () => {
       const token = teamUtils.getAuthToken("investigateur");
+      
+      // Récupérer le type d'utilisateur depuis le stockage directement
+      const userType = localStorage.getItem("user_type") || sessionStorage.getItem("user_type");
 
-      if (token) {
+      if (token && userType === "investigateur") {
         setIsAuthenticated(true);
         return true;
       } else {
@@ -37,104 +53,95 @@ const DashboardInvest = ({ onDeconnexion }) => {
     checkAuth();
   }, []);
 
-  // Charger les données de l'investigateur si authentifié
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchInvestData();
-    }
-  }, [isAuthenticated, avatarUpdated]);
-
-  // Vérifier périodiquement la validité de la session
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    let interval;
-    let timeoutId;
-
-    const checkSession = async () => {
-      try {
-        const response = await API.get("/investigateur/profile");
-        if (!response.data.success) {
-          handleSessionExpired();
-        }
-      } catch (error) {
-        if (error.response?.status === 401) {
-          handleSessionExpired();
-          if (interval) clearInterval(interval);
-        } else if (error.response?.status === 429) {
-          // Rate limiting - augmenter le délai
-          console.warn(
-            "⚠️ Rate limit détecté lors de la vérification de session"
-          );
-          if (interval) clearInterval(interval);
-          // Attendre 60 secondes avant de réessayer
-          timeoutId = setTimeout(() => {
-            interval = setInterval(checkSession, 30000);
-          }, 60000);
-        }
-      }
-    };
-
-    interval = setInterval(checkSession, 30000);
-    return () => {
-      if (interval) clearInterval(interval);
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [isAuthenticated]);
-
-  const fetchInvestData = async () => {
-    const token = teamUtils.getAuthToken("investigateur");
-    if (!token) {
-      handleSessionExpired();
-      return;
-    }
-
+  // Charger les données de l'investigateur
+  const fetchInvestData = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError("");
+      
+      const token = teamUtils.getAuthToken("investigateur");
+      if (!token) {
+        handleSessionExpired();
+        return;
+      }
 
       const response = await API.get("/investigateur/profile");
-
+      
       if (response.data.success) {
         setInvestData(response.data.data);
         setData(response.data.data);
+      } else {
+        throw new Error("Réponse invalide du serveur");
       }
     } catch (error) {
       if (error.response?.status === 401) {
         handleSessionExpired();
+      } else if (error.message?.includes("INSUFFICIENT_RESOURCES") || error.code === 'ERR_NETWORK') {
+        setError("Problème de connexion. Vérifiez votre réseau.");
       } else {
-        console.error("Erreur lors du chargement des données:", error);
+        setError("Erreur lors du chargement des données.");
       }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [handleSessionExpired]);
 
-  const handleSessionExpired = () => {
-    // Nettoyer le stockage
-    teamUtils.logout("investigateur");
-    setIsAuthenticated(false);
+  // Charger les données si authentifié
+  useEffect(() => {
+    if (isAuthenticated) {
+      const timer = setTimeout(() => {
+        fetchInvestData();
+      }, 500);
 
-    // Afficher une alerte
-    setTimeout(() => {
-      alert(
-        "Votre session a expiré. Vous allez être redirigé vers la page de connexion."
-      );
-    }, 100);
-
-    // Appeler la fonction de déconnexion parente
-    if (onDeconnexion) {
-      onDeconnexion();
+      return () => clearTimeout(timer);
     }
-  };
+  }, [isAuthenticated, avatarUpdated, fetchInvestData]);
+
+  // Vérification périodique de session
+  useEffect(() => {
+    if (!isAuthenticated || !investData) return;
+
+    const checkSession = async () => {
+      try {
+        await API.get("/investigateur/profile");
+      } catch (error) {
+        if (error.response?.status === 401) {
+          handleSessionExpired();
+        }
+      }
+    };
+
+    const interval = setInterval(checkSession, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, investData, handleSessionExpired]);
+
+  // Écouter les événements de déconnexion
+  useEffect(() => {
+    const handleTokenExpired = () => {
+      handleSessionExpired();
+    };
+
+    window.addEventListener("tokenExpired", handleTokenExpired);
+    
+    return () => {
+      window.removeEventListener("tokenExpired", handleTokenExpired);
+    };
+  }, [handleSessionExpired]);
 
   const handleAvatarUpdate = () => {
-    setAvatarUpdated((prev) => prev + 1);
-    setHeaderAvatarUpdate((prev) => prev + 1);
+    setAvatarUpdated(prev => prev + 1);
   };
 
   const handleHeaderAvatarUpdate = () => {
-    setHeaderAvatarUpdate((prev) => prev + 1);
     fetchInvestData();
+  };
+
+  const handleNavigateToProfile = () => {
+    setCurrentView("profil");
+  };
+
+  const handleNavigateToNotifications = () => {
+    setCurrentView("notifications");
   };
 
   const renderView = () => {
@@ -142,6 +149,21 @@ const DashboardInvest = ({ onDeconnexion }) => {
       return (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        </div>
+      );
+    }
+
+    if (error && !investData) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <div className="text-red-600 text-lg mb-2">Erreur</div>
+          <p className="text-gray-700 mb-4">{error}</p>
+          <button
+            onClick={fetchInvestData}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            Réessayer
+          </button>
         </div>
       );
     }
@@ -169,10 +191,6 @@ const DashboardInvest = ({ onDeconnexion }) => {
     }
   };
 
-  const handleNavigateToProfile = () => {
-    setCurrentView("profil");
-  };
-
   // Si non authentifié, afficher un message d'erreur
   if (!isAuthenticated && !isLoading) {
     return (
@@ -198,8 +216,7 @@ const DashboardInvest = ({ onDeconnexion }) => {
               Erreur d'authentification
             </h2>
             <p className="text-gray-600 mb-4">
-              Impossible d'accéder au tableau de bord. Le token
-              d'authentification est manquant.
+              Impossible d'accéder au tableau de bord.
             </p>
             <button
               onClick={() => (window.location.href = "/login")}
@@ -217,9 +234,10 @@ const DashboardInvest = ({ onDeconnexion }) => {
     <div className="min-h-screen bg-gray-50">
       <HeaderTeam
         onNavigateToProfile={handleNavigateToProfile}
+        onNavigateToNotifications={handleNavigateToNotifications}
         onDeconnexion={onDeconnexion}
         userData={investData}
-        onAvatarUpdate={headerAvatarUpdate}
+        onAvatarUpdate={handleHeaderAvatarUpdate}
         userRole="investigateur"
       />
 

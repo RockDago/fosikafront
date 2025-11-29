@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Bell,
   ChevronDown,
+  X,
   FileText,
   AlertTriangle,
   CheckCircle,
@@ -13,6 +14,7 @@ const Header = ({
   onNavigateToNotifications,
   onDeconnexion,
   onNavigateToProfile,
+  onNavigateToSettings,
   adminData,
   onAvatarUpdate,
 }) => {
@@ -24,19 +26,6 @@ const Header = ({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-
-  // Couleurs pour admin (identique au HeaderTeam)
-  const roleColors = {
-    admin: {
-      bg: "bg-blue-600",
-      text: "text-blue-600",
-      light: "bg-blue-50",
-      border: "border-blue-200",
-      badge: "bg-blue-100 text-blue-800",
-    }
-  };
-
-  const currentRole = roleColors.admin;
 
   useEffect(() => {
     fetchAdminData();
@@ -55,7 +44,7 @@ const Header = ({
         sessionStorage.getItem("admin_token");
       if (!token) return;
 
-      const response = await API.get("/notifications/recent-by-role", {
+      const response = await API.get("/notifications/recent", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -107,8 +96,6 @@ const Header = ({
         sessionStorage.getItem("admin_token");
       if (!token) return;
 
-      console.log("🔄 Fetching admin profile for header...");
-
       const response = await API.get("/admin/profile", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -118,19 +105,11 @@ const Header = ({
       if (response.status === 200) {
         const data = response.data;
         if (data.success) {
-          console.log("✅ Admin data loaded for header:", data.data);
           setLocalAdminData(data.data);
-
-          // Notifier le parent si l'avatar a changé
-          if (onAvatarUpdate && data.data.avatar) {
-            onAvatarUpdate(data.data.avatar);
-          }
         }
-      } else {
-        console.error("❌ Failed to fetch admin profile:", response.status);
       }
     } catch (error) {
-      console.error("Error loading admin profile:", error);
+      console.error("Error loading admin data:", error);
     }
   };
 
@@ -174,37 +153,18 @@ const Header = ({
     const data = localAdminData || adminData;
     if (!data) return "A";
 
-    // Utiliser le nom complet pour les initiales (comme HeaderTeam)
-    return data.name
-      ? data.name.substring(0, 2).toUpperCase()
-      : "A";
+    if (data.first_name && data.last_name) {
+      return `${data.first_name[0]}${data.last_name[0]}`.toUpperCase();
+    }
+    return data.name ? data.name.substring(0, 2).toUpperCase() : "A";
   };
 
   const getAvatarUrl = () => {
     const data = localAdminData || adminData;
     if (!data?.avatar) return null;
 
-    // Ajouter un timestamp pour éviter le cache (comme HeaderTeam)
-    let avatarUrl = data.avatar;
-    if (!avatarUrl.includes("http")) {
-      // Si c'est un chemin relatif, ajouter l'URL de base
-      avatarUrl = `${API.defaults.baseURL}${
-        avatarUrl.startsWith("/") ? "" : "/"
-      }${avatarUrl}`;
-    }
-
-    const separator = avatarUrl.includes("?") ? "&" : "?";
-    return `${avatarUrl}${separator}v=${avatarVersion}`;
-  };
-
-  const getDisplayName = () => {
-    const data = localAdminData || adminData;
-    return data?.name || "Administrateur";
-  };
-
-  const getDisplayEmail = () => {
-    const data = localAdminData || adminData;
-    return data?.email || "admin@fosika.gov";
+    const separator = data.avatar.includes("?") ? "&" : "?";
+    return `${data.avatar}${separator}t=${Date.now()}`;
   };
 
   const handleLogout = () => {
@@ -227,15 +187,17 @@ const Header = ({
     }
   };
 
+  const handleSettingsClick = () => {
+    setUserDropdownOpen(false);
+    if (onNavigateToSettings) {
+      onNavigateToSettings();
+    }
+  };
+
   const handleViewAllNotifications = () => {
     setNotificationDropdownOpen(false);
     if (onNavigateToNotifications) {
       onNavigateToNotifications({ view: "list" });
-    } else {
-      console.warn("onNavigateToNotifications n'est pas défini");
-      alert(
-        "Page des notifications - Fonctionnalité en cours de développement"
-      );
     }
   };
 
@@ -250,26 +212,15 @@ const Header = ({
         view: "detail",
         notification: notification,
       });
-    } else {
-      console.warn("onNavigateToNotifications n'est pas défini");
-      alert(`Détail de la notification: ${notification.titre}`);
     }
   };
 
   const handleAvatarError = (e) => {
-    console.error("Avatar image failed to load, using initials");
-    e.target.style.display = "none";
-    // Forcer le re-render pour afficher les initiales
-    setAvatarVersion((prev) => prev + 1);
-  };
-
-  const handleAvatarLoad = (e) => {
-    console.log("Avatar loaded successfully");
+    console.error("Avatar image failed to load");
   };
 
   const avatarUrl = getAvatarUrl();
-  const displayName = getDisplayName();
-  const displayEmail = getDisplayEmail();
+  const displayData = localAdminData || adminData;
 
   return (
     <>
@@ -283,7 +234,7 @@ const Header = ({
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Notification Bell - Même style que HeaderTeam */}
+          {/* Notification Bell */}
           <div className="relative">
             <button
               onClick={() =>
@@ -316,7 +267,7 @@ const Header = ({
                       key={notification.id}
                       className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
                         notification.status === "active"
-                          ? `${currentRole.light} border-l-2 ${currentRole.border}`
+                          ? "bg-blue-50 border-l-2 border-l-blue-500"
                           : ""
                       }`}
                       onClick={() => handleNotificationClick(notification)}
@@ -331,9 +282,7 @@ const Header = ({
                               {notification.titre}
                             </div>
                             {notification.status === "active" && (
-                              <span
-                                className={`w-2 h-2 ${currentRole.bg} rounded-full flex-shrink-0 mt-1`}
-                              ></span>
+                              <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600 mb-1 line-clamp-2">
@@ -367,41 +316,30 @@ const Header = ({
             )}
           </div>
 
-          {/* User Profile - Même style que HeaderTeam */}
+          {/* User Profile */}
           <div className="relative">
             <button
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
               className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <div
-                className={`w-10 h-10 ${currentRole.bg} rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative`}
-              >
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative">
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Avatar"
                     className="w-full h-full object-cover"
                     onError={handleAvatarError}
-                    onLoad={handleAvatarLoad}
-                    key={`avatar-${avatarVersion}`}
+                    key={avatarVersion}
                   />
-                ) : null}
-                <span
-                  className={`flex items-center justify-center w-full h-full ${
-                    avatarUrl ? "hidden" : ""
-                  }`}
-                >
-                  {getInitials()}
-                </span>
+                ) : (
+                  <span className="flex items-center justify-center w-full h-full">
+                    {getInitials()}
+                  </span>
+                )}
               </div>
-              <div className="text-left">
-                <span className="text-sm font-medium text-gray-700 block">
-                  {displayName}
-                </span>
-                <span className="text-xs text-gray-500 block">
-                  {displayEmail}
-                </span>
-              </div>
+              <span className="text-sm font-medium text-gray-700">
+                {displayData?.name || "Admin"}
+              </span>
               <ChevronDown className="w-4 h-4 text-gray-500" />
             </button>
 
@@ -413,7 +351,10 @@ const Header = ({
                 >
                   Profil
                 </button>
-                <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={handleSettingsClick}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
                   Paramètres
                 </button>
                 <div className="border-t border-gray-200"></div>

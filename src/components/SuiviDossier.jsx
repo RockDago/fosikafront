@@ -193,14 +193,21 @@ export default function DossierTracker() {
     fetchReports();
   }, []);
 
+  // Fonction pour nettoyer la référence (supprimer les espaces)
+  const cleanReference = (ref) => {
+    return ref.replace(/\s+/g, ""); // Supprime tous les espaces
+  };
+
   const handleRecherche = () => {
-    if (!reference.trim()) {
+    const cleanedReference = cleanReference(reference);
+
+    if (!cleanedReference.trim()) {
       setErreur("Veuillez saisir une référence");
       return;
     }
 
     const dossier = reports.find(
-      (r) => r.reference.toLowerCase() === reference.toLowerCase()
+      (r) => r.reference.toLowerCase() === cleanedReference.toLowerCase()
     );
 
     if (dossier) {
@@ -209,6 +216,18 @@ export default function DossierTracker() {
       setPage("details");
     } else {
       setErreur("Aucun dossier trouvé avec cette référence");
+    }
+  };
+
+  // Gestionnaire de changement pour le champ de référence
+  const handleReferenceChange = (e) => {
+    const value = e.target.value;
+    const cleanedValue = cleanReference(value);
+    setReference(cleanedValue);
+
+    // Effacer l'erreur quand l'utilisateur tape
+    if (erreur) {
+      setErreur("");
     }
   };
 
@@ -487,7 +506,7 @@ export default function DossierTracker() {
                     <input
                       type="text"
                       value={reference}
-                      onChange={(e) => setReference(e.target.value)}
+                      onChange={handleReferenceChange}
                       placeholder="Ex: REF-20251119-6AB2BF"
                       className="w-full px-4 py-3.5 pl-12 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-[#5e8f3e] focus:border-[#5e8f3e] transition-all outline-none"
                       onKeyPress={(e) => e.key === "Enter" && handleRecherche()}
