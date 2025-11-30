@@ -26,6 +26,7 @@ const ProfileTeam = ({
   const [avatarPreview, setAvatarPreview] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarLoadable, setAvatarLoadable] = useState(false); // ✅ NOUVEL ÉTAT
 
   // Couleurs par rôle
   const roleColors = {
@@ -52,9 +53,31 @@ const ProfileTeam = ({
   const currentRole = roleColors[userRole] || roleColors.admin;
 
   useEffect(() => {
-
     fetchUserProfile();
   }, [userRole, userData]);
+
+  // ✅ Fonction SILENCIEUSE pour gérer les erreurs de chargement d'image d'avatar
+  const handleAvatarImageError = (e) => {
+    // Masquer l'image silencieusement
+    e.target.style.display = "none";
+
+    // Afficher les initiales
+    const initialsSpan = e.target.nextSibling;
+    if (initialsSpan) {
+      initialsSpan.style.display = "flex";
+      initialsSpan.classList.remove("hidden");
+    }
+  };
+
+  // ✅ Tester si l'image est accessible
+  const testImageLoad = (url) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
+  };
 
   const fetchUserProfile = async () => {
     // Vérification améliorée de l'authentification
@@ -85,9 +108,37 @@ const ProfileTeam = ({
         }));
 
         if (data.avatar) {
-          setAvatarPreview(`${data.avatar}?t=${new Date().getTime()}`);
+          // ✅ CORRECTION : Construire l'URL correcte pour l'avatar
+          let avatarUrl = data.avatar;
+
+          // Si c'est un chemin de stockage Laravel, utiliser la route API
+          if (avatarUrl.includes("storage/avatars/")) {
+            const fileName = avatarUrl.split("/").pop();
+            avatarUrl = `/api/file/avatar/${fileName}`;
+          }
+
+          // Construire l'URL complète si nécessaire
+          if (!avatarUrl.startsWith("http")) {
+            const baseURL =
+              process.env.REACT_APP_API_URL || "http://localhost:8000";
+            avatarUrl = `${baseURL}${
+              avatarUrl.startsWith("/") ? "" : "/"
+            }${avatarUrl}`;
+          }
+
+          // Tester si l'image est accessible avant de l'afficher
+          const isLoadable = await testImageLoad(avatarUrl);
+          setAvatarLoadable(isLoadable);
+
+          if (isLoadable) {
+            // Ajouter un timestamp pour éviter le cache
+            setAvatarPreview(`${avatarUrl}?t=${new Date().getTime()}`);
+          } else {
+            setAvatarPreview("");
+          }
         } else {
           setAvatarPreview("");
+          setAvatarLoadable(false);
         }
 
         setErrors({});
@@ -170,6 +221,7 @@ const ProfileTeam = ({
       const reader = new FileReader();
       reader.onload = (e) => {
         setAvatarPreview(e.target.result);
+        setAvatarLoadable(true);
       };
       reader.readAsDataURL(file);
 
@@ -179,7 +231,13 @@ const ProfileTeam = ({
         const newAvatarUrl = response.data?.avatar_url || response.avatar_url;
 
         if (newAvatarUrl) {
-          setAvatarPreview(`${newAvatarUrl}?t=${new Date().getTime()}`);
+          // Tester la nouvelle URL
+          const isLoadable = await testImageLoad(newAvatarUrl);
+          setAvatarLoadable(isLoadable);
+
+          if (isLoadable) {
+            setAvatarPreview(`${newAvatarUrl}?t=${new Date().getTime()}`);
+          }
         }
 
         setSuccessMessage("Avatar mis à jour avec succès");
@@ -375,22 +433,21 @@ const ProfileTeam = ({
           <div className={`bg-gradient-to-r ${currentRole.gradient} px-6 py-8`}>
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-white text-2xl font-bold border-4 border-white shadow-lg overflow-hidden">
-                  {avatarPreview ? (
+                <div
+                  className={`w-24 h-24 bg-white rounded-full flex items-center justify-center ${currentRole.text} text-2xl font-bold border-4 border-white shadow-lg overflow-hidden`}
+                >
+                  {avatarPreview && avatarLoadable ? (
                     <img
                       src={avatarPreview}
                       alt="Avatar"
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
+                      onError={handleAvatarImageError}
                     />
                   ) : null}
                   <span
                     className={`flex items-center justify-center w-full h-full ${
-                      avatarPreview ? "hidden" : ""
-                    } ${currentRole.text}`}
+                      avatarPreview && avatarLoadable ? "hidden" : ""
+                    }`}
                   >
                     {getInitials()}
                   </span>

@@ -25,6 +25,7 @@ const HeaderTeam = ({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showAvatar, setShowAvatar] = useState(false); // ✅ NOUVEL ÉTAT
 
   // Couleurs par rôle
   const roleColors = {
@@ -53,6 +54,18 @@ const HeaderTeam = ({
 
   const currentRole = roleColors[userRole] || roleColors.admin;
 
+  // ✅ FONCTION POUR TESTER LE CHARGEMENT DE L'AVATAR
+  const testAvatarLoad = (avatarUrl) => {
+    const img = new Image();
+    img.onload = () => {
+      setShowAvatar(true);
+    };
+    img.onerror = () => {
+      setShowAvatar(false);
+    };
+    img.src = avatarUrl;
+  };
+
   // Mémoriser fetchUserProfile pour éviter les dépendances circulaires
   const fetchUserProfile = useCallback(async () => {
     try {
@@ -74,6 +87,14 @@ const HeaderTeam = ({
         if (data.success) {
           console.log("✅ Profile data loaded for header:", data.data);
           setLocalUserData(data.data);
+
+          // ✅ VÉRIFIER SI L'AVATAR EXISTE ET EST ACCESSIBLE
+          if (data.data?.avatar) {
+            const avatarUrl = getAvatarUrl(data.data.avatar);
+            testAvatarLoad(avatarUrl);
+          } else {
+            setShowAvatar(false);
+          }
 
           // Notifier le parent si l'avatar a changé
           if (onAvatarUpdate && data.data.avatar) {
@@ -97,6 +118,14 @@ const HeaderTeam = ({
   useEffect(() => {
     if (userData) {
       setLocalUserData(userData);
+      
+      // ✅ VÉRIFIER SI L'AVATAR EXISTE ET EST ACCESSIBLE
+      if (userData?.avatar) {
+        const avatarUrl = getAvatarUrl(userData.avatar);
+        testAvatarLoad(avatarUrl);
+      } else {
+        setShowAvatar(false);
+      }
     }
   }, [userData]);
 
@@ -106,8 +135,6 @@ const HeaderTeam = ({
       fetchUserProfile();
     }
   }, [avatarVersion, fetchUserProfile]);
-
-  // Dans HeaderTeam.jsx, mettre à jour fetchRecentNotifications :
 
   const fetchRecentNotifications = useCallback(async () => {
     try {
@@ -133,6 +160,7 @@ const HeaderTeam = ({
       console.error("Erreur chargement notifications récentes:", error);
     }
   }, [userRole]);
+  
   const markNotificationAsRead = async (notificationId) => {
     try {
       const token =
@@ -214,21 +242,33 @@ const HeaderTeam = ({
       : userRole.charAt(0).toUpperCase();
   };
 
-  const getAvatarUrl = () => {
+  const getAvatarUrl = (avatarPath = null) => {
     const data = localUserData || userData;
-    if (!data?.avatar) return null;
+    const avatar = avatarPath || data?.avatar;
 
-    // Ajouter un timestamp pour éviter le cache
-    let avatarUrl = data.avatar;
-    if (!avatarUrl.includes("http")) {
-      // Si c'est un chemin relatif, ajouter l'URL de base
-      avatarUrl = `${API.defaults.baseURL}${
+    if (!avatar) return null;
+
+    let avatarUrl = avatar;
+
+    if (avatarUrl.includes("storage/avatars/")) {
+      const fileName = avatarUrl.split("/").pop();
+      avatarUrl = `/api/file/avatar/${fileName}`;
+    }
+
+    if (!avatarUrl.startsWith("http")) {
+      const baseURL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+      avatarUrl = `${baseURL}${
         avatarUrl.startsWith("/") ? "" : "/"
       }${avatarUrl}`;
     }
 
     const separator = avatarUrl.includes("?") ? "&" : "?";
-    return `${avatarUrl}${separator}v=${avatarVersion}`;
+    return `${avatarUrl}${separator}v=${avatarVersion}&t=${Date.now()}`;
+  };
+
+  // ✅ Gestion silencieuse des erreurs
+  const handleAvatarError = (e) => {
+    setShowAvatar(false);
   };
 
   const getRoleLabel = () => {
@@ -299,17 +339,6 @@ const HeaderTeam = ({
       // Fallback
       alert(`Détail de la notification: ${notification.titre}`);
     }
-  };
-
-  const handleAvatarError = (e) => {
-    console.error("Avatar image failed to load, using initials");
-    e.target.style.display = "none";
-    // Forcer le re-render pour afficher les initiales
-    setAvatarVersion((prev) => prev + 1);
-  };
-
-  const handleAvatarLoad = (e) => {
-    console.log("Avatar loaded successfully");
   };
 
   const avatarUrl = getAvatarUrl();
@@ -421,23 +450,20 @@ const HeaderTeam = ({
               <div
                 className={`w-10 h-10 ${currentRole.bg} rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative`}
               >
-                {avatarUrl ? (
+                {/* ✅ CORRECTION : Afficher soit l'avatar, soit les initiales, mais pas les deux */}
+                {showAvatar && avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Avatar"
                     className="w-full h-full object-cover"
                     onError={handleAvatarError}
-                    onLoad={handleAvatarLoad}
                     key={`avatar-${avatarVersion}`}
                   />
-                ) : null}
-                <span
-                  className={`flex items-center justify-center w-full h-full ${
-                    avatarUrl ? "hidden" : ""
-                  }`}
-                >
-                  {getInitials()}
-                </span>
+                ) : (
+                  <span className="flex items-center justify-center w-full h-full">
+                    {getInitials()}
+                  </span>
+                )}
               </div>
               <div className="text-left">
                 <span className="text-sm font-medium text-gray-700 block">

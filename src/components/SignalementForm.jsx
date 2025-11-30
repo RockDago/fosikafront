@@ -456,7 +456,9 @@ const WelcomePage = ({ language, setLanguage, setStep, navigate }) => {
               {/* ZONE TEXTE AVEC TEXTE RÉDUIT SUR MOBILE - HAUTEUR AUTOMATIQUE SUR DESKTOP */}
               <div className="text-gray-700 text-xs md:text-sm lg:text-base leading-relaxed mb-4 md:mb-6 max-h-[300px] md:max-h-[250px] lg:max-h-none overflow-y-auto pr-2 md:pr-3 pl-1 md:pl-2 scrollable-text">
                 {/* Premier paragraphe avec texte justifié */}
-                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">{t.welcome.title}</p>
+                <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
+                  {t.welcome.title}
+                </p>
 
                 {/* Deuxième paragraphe avec texte justifié */}
                 <p className="mb-2 md:mb-3 text-justify text-xs md:text-sm">
@@ -1646,115 +1648,148 @@ const SuccessPage = ({ language, referenceCode, resetForm, navigate }) => {
   const Asset9 = new URL("../assets/images/Asset 9.png", import.meta.url).href;
 
   const generateRef = () => {
-    const date = new Date().toISOString().slice(0, 10);
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let code = "Pr";
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return `${date}-${code}`;
+    return `REF-${date}-${code}`;
   };
 
   const displayRef = referenceCode || generateRef();
 
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(displayRef);
+      alert(language === "fr" ? "Référence copiée !" : "Naoty ny référence !");
+    } catch (err) {
+      console.error("Erreur lors de la copie: ", err);
+    }
+  };
+
   return (
-    <div className="bg-[#f9faf7] min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative font-['Inter',sans-serif]">
+    <div className="bg-[#f9faf7] min-h-screen flex flex-col items-center justify-center p-3 overflow-hidden relative font-['Inter',sans-serif]">
       {/* Contenu centré avec Asset 8 en fond */}
       <div className="relative flex flex-col items-center justify-center w-full max-w-2xl">
         {/* Asset 8 + bouton X */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-          {/* Image de fond */}
           <img
             src={Asset8}
             alt="Fond décoratif"
             className="w-full max-w-2xl h-auto object-contain opacity-40"
           />
 
-          {/* Petit X proche de l'image */}
+          {/* Bouton X */}
           <button
             onClick={resetForm}
-            className="absolute -top-14 right-2 z-50 bg-white text-red-500 
-           border-2 border-red-500 rounded-full w-10 h-10 
+            className="absolute -top-10 -right-1 z-50 bg-white text-red-500 
+           border-2 border-red-500 rounded-full w-6 h-6 
            flex items-center justify-center hover:bg-red-50 
-           transition-all shadow-md text-2xl font-thin pointer-events-auto"
+           transition-all shadow-md text-lg font-thin pointer-events-auto"
           >
             ×
           </button>
         </div>
 
         {/* Contenu principal */}
-        <div className="relative z-10 text-center space-y-5 px-8">
+        <div className="relative z-10 text-center space-y-3 px-2 md:px-6">
           {/* Asset9 + texte */}
-          <div className="flex items-center justify-center gap-4 md:gap-6">
+          <div className="flex items-center justify-center gap-2 md:gap-4">
             <div className="flex-shrink-0">
               <img
                 src={Asset9}
                 alt="Validation"
-                className="w-24 h-24 md:w-32 md:h-32 object-contain"
+                className="w-14 h-14 md:w-20 md:h-20 lg:w-24 lg:h-24 object-contain"
               />
             </div>
 
-            <div className="text-left space-y-2">
-              <h1 className="text-2xl md:text-3xl font-bold text-[#5e8f3e] leading-tight">
+            <div className="text-left space-y-1">
+              <h1 className="text-base md:text-xl lg:text-2xl font-bold text-[#5e8f3e] leading-tight">
                 {t.success.title}
               </h1>
-              <p className="text-gray-700 text-base md:text-lg font-medium">
+              <p className="text-gray-700 text-xs md:text-sm lg:text-base">
                 {t.success.thanks}
               </p>
             </div>
           </div>
 
-          {/* Référence */}
-          <div className="inline-block mt-4">
-            <span className="text-gray-600 text-sm md:text-base">
-              {t.success.reference}{" "}
-            </span>
-            <span className="font-bold text-base md:text-lg text-gray-900 tracking-wider">
-              {displayRef}
-            </span>
+          {/* Référence copiable - TRÈS PETITE SUR MOBILE */}
+          <div className="mt-2 md:mt-4 space-y-1 md:space-y-2">
+            <p className="text-gray-600 text-xs md:text-sm font-medium">
+              {t.success.reference}
+            </p>
+            <div 
+              onClick={copyToClipboard}
+              className="bg-white border border-[#b3d088] rounded-md p-1 md:p-2 max-w-[240px] md:max-w-sm mx-auto cursor-pointer hover:bg-green-50 transition-colors group"
+            >
+              <div className="flex items-center justify-between gap-0.5 md:gap-2">
+                <span className="font-mono font-bold text-[10px] md:text-base text-gray-900 tracking-tight flex-1 text-center break-all">
+                  {displayRef}
+                </span>
+                <svg 
+                  className="w-2.5 h-2.5 md:w-4 md:h-4 text-gray-400 group-hover:text-[#5e8f3e] transition-colors flex-shrink-0" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth="2" 
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" 
+                  />
+                </svg>
+              </div>
+              <p className="text-[9px] md:text-xs text-gray-500 mt-0.5 text-center">
+                {language === "fr" 
+                  ? "Cliquez pour copier" 
+                  : "Tsindrio hanonta"
+                }
+              </p>
+            </div>
           </div>
 
-          {/* Suivi dossier */}
-          <div className="space-y-2 mt-4">
-            <p className="text-gray-700 text-sm md:text-base">
-              {t.success.tracking}
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => navigate("/suivi")}
-                className="text-[#5e8f3e] font-bold text-base md:text-lg underline hover:text-[#4a7230] transition"
-              >
-                {t.success.trackButton}
-              </button>
-              <svg
-                className="w-5 h-5 text-[#5e8f3e]"
-                fill="none"
-                stroke="currentColor"
+          {/* Bouton de suivi */}
+          <div className="mt-2 md:mt-4">
+            <button
+              onClick={() => navigate("/suivi")}
+              className="bg-[#5e8f3e] hover:bg-[#4a7b32] text-white font-bold py-1 md:py-2 px-3 md:px-6 rounded md:rounded-lg transition-all duration-300 shadow hover:shadow-lg transform hover:scale-105 flex items-center gap-1 md:gap-2 mx-auto text-[11px] md:text-sm"
+            >
+              <svg 
+                className="w-2.5 h-2.5 md:w-4 md:h-4" 
+                fill="none" 
+                stroke="currentColor" 
                 viewBox="0 0 24 24"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth="2" 
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" 
+                />
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth="2" 
+                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" 
                 />
               </svg>
-            </div>
+              {t.success.trackButton}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* COPYRIGHT EN DEHORS DE LA ZONE PRINCIPALE */}
-      <div className="w-full max-w-6xl text-center mt-4">
-        <div className="text-gray-500 text-xs">
+      {/* COPYRIGHT */}
+      <div className="w-full max-w-6xl text-center mt-2 md:mt-4">
+        <div className="text-gray-500 text-[9px] md:text-xs">
           copyright @ daaq-Mesupres 2025
         </div>
       </div>
     </div>
   );
 };
-
 // Composant principal
 const SignalementForm = () => {
   const navigate = useNavigate();

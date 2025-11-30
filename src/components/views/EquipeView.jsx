@@ -10,7 +10,7 @@ const tabs = [
 ];
 
 const departements = ["DAAQ", "DRSE"];
-const departementsInvestigateur = ["CAC", "DAGI"];
+const departementsInvestigateur = ["CAC", "DAJ"];
 
 // Helper: Rôles standards du backend
 const STANDARD_ROLES = [
@@ -19,7 +19,7 @@ const STANDARD_ROLES = [
   { id: 3, name: "Investigateur", code: "Investigateur" },
 ];
 
-// Helper: Obtenir l'objet rôle à partir d'une chaîne (ex. 'Agent' -> {id: 2, name: 'Agent', code: 'Agent'})
+// Helper: Obtenir l'objet rôle à partir d'une chaîne
 const getRoleByName = (roleName) => {
   if (!roleName) return null;
   return STANDARD_ROLES.find((r) => r.code === roleName || r.name === roleName);
@@ -412,7 +412,6 @@ function CreateUserModal({ open, onClose, selectedRole, onUserCreated }) {
   }, [open, selectedRole]);
 
   const getAvailableDepartements = () => {
-
     if (!formData.role_id) {
       return [];
     }
@@ -425,9 +424,9 @@ function CreateUserModal({ open, onClose, selectedRole, onUserCreated }) {
       case "Agent":
         return ["DAAQ", "DRSE"];
       case "Investigateur":
-        return ["CAC", "DAGI"];
+        return ["CAC", "DAJ"];
       case "Admin":
-        return ["DAAQ", "DRSE", "CAC", "DAGI"];
+        return ["DAAQ", "DRSE", "CAC", "DAJ"];
       default:
         return [];
     }
@@ -491,7 +490,6 @@ function CreateUserModal({ open, onClose, selectedRole, onUserCreated }) {
         });
       }
     } catch (err) {
-      // Meilleure gestion des erreurs de validation
       if (err.response?.status === 422) {
         const errors = err.response?.data?.errors;
         if (errors && typeof errors === "object") {
@@ -655,11 +653,11 @@ function CreateUserModal({ open, onClose, selectedRole, onUserCreated }) {
                 </span>
               ) : currentRole?.code === "Agent" ? (
                 <span className="text-blue-600">
-                  Départements disponibles pour l'Équipe de Suivi
+                  Départements disponibles pour l'equipe de Suivi
                 </span>
               ) : currentRole?.code === "Investigateur" ? (
                 <span className="text-orange-600">
-                  Départements disponibles pour l'Équipe d'Investigation
+                  Départements disponibles pour l'equipe d'investigation
                 </span>
               ) : (
                 <span className="text-purple-600">
@@ -827,7 +825,6 @@ function ModalEditUser({ open, onClose, user, onUserUpdated }) {
     }
   };
 
-  // Dans le composant ModalEditUser - amélioration de la gestion des erreurs
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -840,7 +837,6 @@ function ModalEditUser({ open, onClose, user, onUserUpdated }) {
       return;
     }
 
-    // CORRECTION : Validation du rôle
     if (!formData.role_id) {
       setError("Veuillez sélectionner un rôle");
       setLoading(false);
@@ -848,7 +844,6 @@ function ModalEditUser({ open, onClose, user, onUserUpdated }) {
     }
 
     try {
-      // Envoyer les données sans modification supplémentaire
       const response = await teamService.updateUser(user.id, formData);
 
       if (response.success) {
@@ -856,7 +851,6 @@ function ModalEditUser({ open, onClose, user, onUserUpdated }) {
         onClose();
       }
     } catch (err) {
-      // CORRECTION : Meilleure gestion des erreurs de validation
       if (err.errors) {
         const firstError = Object.values(err.errors)[0]?.[0];
         setError(firstError || err.message || "Erreur lors de la modification");
@@ -993,8 +987,8 @@ function ModalEditUser({ open, onClose, user, onUserUpdated }) {
               {formData.role_id
                 ? availableRoles.find((r) => r.id === formData.role_id)
                     ?.code === "Agent"
-                  ? "Départements disponibles pour l'Équipe de Suivi"
-                  : "Départements disponibles pour l'Équipe d'Investigation"
+                  ? "Départements disponibles pour l'Équipe de suivi"
+                  : "Départements disponibles pour l'Équipe d'investigation"
                 : "Sélectionnez d'abord un rôle"}
             </div>
           </div>
@@ -1305,224 +1299,83 @@ export default function EquipeView() {
     }
   }, [dataLoaded]);
 
-  // Rafraîchir les données toutes les 30 secondes (au lieu de 1 seconde) pour éviter le rate limiting
+  // CORRECTION : Simplifier l'intervalle de rafraîchissement
   useEffect(() => {
     const interval = setInterval(() => {
-      loadAllData();
-    }, 30000); // Rafraîchir chaque 30 secondes (30000ms)
+      if (dataLoaded) {
+        loadAllData();
+      }
+    }, 60000); // Rafraîchir toutes les minutes
 
     return () => clearInterval(interval);
-  }, []);
+  }, [dataLoaded]);
 
+  // CORRECTION : Version simplifiée de loadAllData
   const loadAllData = async () => {
     setLoading(true);
     try {
-      // Charger d'abord les rôles pour disposer des codes / ids fiables
-      const roleMap = {};
-      try {
-        const rolesResp = await teamService.getRoles();
-        if (rolesResp?.success) {
-          const rolesData = rolesResp.data || [];
-          setAvailableRoles(rolesData);
-          rolesData.forEach((r) => {
-            if (r && r.id != null) {
-              roleMap[r.id] = {
-                code: (r.code || "").toString().toUpperCase(),
-                name: (r.name || "").toString().toUpperCase(),
-              };
-            }
-          });
-        }
-      } catch (rolesErr) {
+      console.log("🔄 Chargement des données team...");
+
+      // Vérifier que la méthode existe
+      if (typeof teamService.getAllUsers !== "function") {
+        console.error("❌ teamService.getAllUsers n'est pas une fonction");
+        throw new Error("Méthode getAllUsers non disponible");
       }
 
-      // Essayer d'abord d'utiliser les endpoints dédiés fournis par le backend
-      const extractUsers = (resp) => {
-        if (!resp) return [];
-        // resp peut être { success:true, data: [...] } ou directement { data: [...] } ou [...]
-        if (Array.isArray(resp)) return resp;
-        if (resp.success && Array.isArray(resp.data)) return resp.data;
-        if (resp.data && Array.isArray(resp.data.data)) return resp.data.data;
-        if (resp.data && Array.isArray(resp.data)) return resp.data;
-        return [];
-      };
+      // Charger tous les utilisateurs
+      const response = await teamService.getAllUsers();
 
-      let adminsResp = null;
-      let agentsResp = null;
-      let investigResp = null;
-
-      try {
-        [adminsResp, agentsResp, investigResp] = await Promise.all([
-          teamService.getAdministrateurs().catch((e) => {
-            console.debug("getAdministrateurs failed", e);
-            return null;
-          }),
-          teamService.getAgents().catch((e) => {
-            console.debug("getAgents failed", e);
-            return null;
-          }),
-          teamService.getInvestigateurs().catch((e) => {
-            console.debug("getInvestigateurs failed", e);
-            return null;
-          }),
-        ]);
-      } catch (err) {
-        console.debug("Erreur Promise.all endpoints dédiés:", err);
-      }
-
-      const adminsFromApi = extractUsers(adminsResp);
-      const agentsFromApi = extractUsers(agentsResp);
-      const investigFromApi = extractUsers(investigResp);
-
+      // Extraire les données selon le format de réponse
       let allUsers = [];
-      // Si au moins un endpoint dédié a renvoyé des données, on les utilise
-      if (
-        adminsFromApi.length > 0 ||
-        agentsFromApi.length > 0 ||
-        investigFromApi.length > 0
-      ) {
-        setAdministrateurs(adminsFromApi || []);
-        setAgents(agentsFromApi || []);
-        setInvestigateurs(investigFromApi || []);
-        setDataLoaded(true);
-        setLoading(false);
-        return;
+      if (response && response.success && Array.isArray(response.data)) {
+        allUsers = response.data;
+      } else if (Array.isArray(response)) {
+        allUsers = response;
+      } else if (response && Array.isArray(response.data)) {
+        allUsers = response.data;
+      } else {
+        console.error("❌ Format de réponse inattendu:", response);
+        allUsers = [];
       }
 
-      // Sinon récupérer l'ensemble des utilisateurs et retomber sur la classification locale
-      try {
-        const response = await teamService.getAllUsers();
-        if (response && response.success && Array.isArray(response.data)) {
-          allUsers = response.data;
-        } else if (Array.isArray(response)) {
-          allUsers = response;
-        } else if (response && Array.isArray(response.data?.data)) {
-          allUsers = response.data.data;
-        } else if (response && Array.isArray(response.data)) {
-          allUsers = response.data;
-        }
-      } catch (e) {
-        try {
-          const response = await teamService.getUsers();
-          if (response && response.success && Array.isArray(response.data)) {
-            allUsers = response.data;
-          } else if (Array.isArray(response)) {
-            allUsers = response;
-          }
-        } catch (e2) {
-        }
-      }
+      console.log("📊 Utilisateurs trouvés:", allUsers.length);
 
-      // Normaliser certains champs et construire un rôle connu par utilisateur
-      const normalizedUsers = allUsers.map((u) => ({
-        ...u,
-        role_id: u.role_id ?? u.role?.id,
-        role: u.role ?? {},
-        departement: u.departement ?? "",
-      }));
-
-      // DEBUG: afficher un échantillon des utilisateurs et la détection des rôles
-      try {
-        const sample = normalizedUsers.slice(0, 12).map((u) => ({
-          id: u.id,
-          role_raw: u.role,
-          role_id: u.role_id,
-          detected_code: detectRoleCode(u),
-          detected_name: detectRoleName(u),
-          departement: u.departement,
-          statut: u.statut,
-        }));
-      } catch (debugErr) {
-      }
-
-      // Détection robuste du rôle via role.code (si présent), puis via roleMap (récupéré), puis via role.name
-      const detectRoleCode = (user) => {
-        if (!user) return "";
-        // Si `role` est une string (ex: "agent_suivi" ou "Agent de Suivi")
-        if (typeof user.role === "string") return user.role.toUpperCase();
-
-        // Si `role` est un objet avec `code`
-        const rc = (user.role?.code || "").toString().toUpperCase();
-        if (rc) return rc;
-
-        // Essayer via mapping des rôles (chargés depuis l'API ou mocks)
-        const mapped = roleMap[user.role_id];
-        if (mapped && mapped.code) return mapped.code;
-
-        // Enfin tomber sur le nom du rôle
-        const rn = (user.role?.name || "").toString().toUpperCase();
-        return rn;
-      };
-
-      const detectRoleName = (user) => {
-        if (!user) return "";
-        if (typeof user.role === "string") return user.role.toUpperCase();
-
-        const rn = (user.role?.name || "").toString().toUpperCase();
-        if (rn) return rn;
-
-        const mapped = roleMap[user.role_id];
-        if (mapped && mapped.name) return mapped.name;
-
-        return (user.role?.code || "").toString().toUpperCase();
-      };
-
-      // Classifier en donnant la priorité aux administrateurs, puis aux agents, puis aux investigateurs
-      const administrateurs = normalizedUsers.filter((user) => {
-        const roleCode = detectRoleCode(user);
-        const roleName = detectRoleName(user);
-        return (
-          roleCode.includes("ADMIN") ||
-          roleName.includes("ADMIN") ||
-          user.is_admin === true ||
-          user.role_id === 1
-        );
-      });
-
-      const agents = normalizedUsers.filter((user) => {
-        const dept = (user.departement || "").toUpperCase();
-        const roleCode = detectRoleCode(user);
-        const roleName = detectRoleName(user);
-
-        return (
-          dept.includes("DAAQ") ||
-          dept.includes("DRSE") ||
-          roleCode.includes("AGENT") ||
-          roleCode.includes("AGENT_SUIVI") ||
-          roleName.includes("AGENT") ||
-          roleName.includes("SUIVI") ||
-          user.role_id === 2
-        );
-      });
-
-      const investigateurs = normalizedUsers.filter((user) => {
-        const dept = (user.departement || "").toUpperCase();
-        const roleCode = detectRoleCode(user);
-        const roleName = detectRoleName(user);
-
-        return (
-          dept.includes("CAC") ||
-          dept.includes("DAGI") ||
-          roleCode.includes("INVESTIGATEUR") ||
-          roleName.includes("INVESTIGATEUR") ||
-          user.role_id === 3
-        );
-      });
-
-      // Exclusions pour éviter les doublons : priorité Admin > Agents > Investigateurs
-      const adminIds = new Set(administrateurs.map((a) => a.id));
-      const agentFiltered = agents.filter((a) => !adminIds.has(a.id));
-      const investigateurFiltered = investigateurs.filter(
-        (i) => !adminIds.has(i.id) && !agentFiltered.some((a) => a.id === i.id)
+      // Filtrer les utilisateurs par rôle/département
+      const administrateurs = allUsers.filter(
+        (user) =>
+          user.role?.toLowerCase().includes("admin") || user.role_id === 1
       );
 
-      setAgents(agentFiltered);
-      setInvestigateurs(investigateurFiltered);
-      setAdministrateurs(administrateurs);
+      const agents = allUsers.filter(
+        (user) =>
+          (user.role?.toLowerCase().includes("agent") ||
+            user.departement?.match(/DAAQ|DRSE/i) ||
+            user.role_id === 2) &&
+          !administrateurs.some((admin) => admin.id === user.id)
+      );
 
+      const investigateurs = allUsers.filter(
+        (user) =>
+          (user.role?.toLowerCase().includes("investigateur") ||
+            user.departement?.match(/CAC|DAJ/i) ||
+            user.role_id === 3) &&
+          !administrateurs.some((admin) => admin.id === user.id) &&
+          !agents.some((agent) => agent.id === user.id)
+      );
+
+      // Mettre à jour les états
+      setAgents(agents);
+      setInvestigateurs(investigateurs);
+      setAdministrateurs(administrateurs);
       setDataLoaded(true);
+
+      console.log(
+        `✅ Résultat: ${agents.length} agents, ${investigateurs.length} investigateurs, ${administrateurs.length} admins`
+      );
     } catch (error) {
+      console.error("💥 ERREUR lors du chargement:", error);
       setDataLoaded(true);
+      showSuccess("Erreur lors du chargement des données");
     } finally {
       setLoading(false);
     }
@@ -1535,6 +1388,7 @@ export default function EquipeView() {
         setAvailableRoles(response.data);
       }
     } catch (error) {
+      console.error("Erreur chargement rôles:", error);
     }
   };
 
@@ -1555,7 +1409,7 @@ export default function EquipeView() {
   };
 
   const handleUserCreated = (newUser) => {
-    // Recharger tous les utilisateurs après création
+    console.log("👤 Utilisateur créé - Rechargement des données...", newUser);
     loadAllData();
     showSuccess("Utilisateur créé avec succès");
   };
@@ -1567,7 +1421,10 @@ export default function EquipeView() {
   };
 
   const handleUserUpdated = (updatedUser) => {
-    // Recharger tous les utilisateurs après modification
+    console.log(
+      "✏️ Utilisateur modifié - Rechargement des données...",
+      updatedUser
+    );
     loadAllData();
     showSuccess("Utilisateur modifié avec succès");
   };
@@ -1593,11 +1450,11 @@ export default function EquipeView() {
     try {
       const response = await teamService.deleteUser(userToDelete.id);
       if (response.success) {
-        // Recharger les données après suppression
         loadAllData();
         showSuccess("Utilisateur supprimé avec succès");
       }
     } catch (error) {
+      console.error("❌ Erreur suppression:", error);
       showSuccess("Erreur lors de la suppression");
     } finally {
       setDeleteLoading(false);
@@ -1611,7 +1468,6 @@ export default function EquipeView() {
     try {
       const response = await teamService.toggleStatus(user.id);
       if (response.success) {
-        // Recharger les données après changement de statut
         loadAllData();
         showSuccess(
           `Utilisateur ${
@@ -1620,6 +1476,7 @@ export default function EquipeView() {
         );
       }
     } catch (error) {
+      console.error("❌ Erreur changement statut:", error);
       showSuccess("Erreur lors du changement de statut");
     }
   };
@@ -1643,11 +1500,11 @@ export default function EquipeView() {
         loadRoles();
       }
     } catch (error) {
+      console.error("❌ Erreur mise à jour permissions:", error);
       showSuccess("Erreur lors de la mise à jour des permissions");
     }
   };
 
-  // Rendu des tables avec données de la base de données
   // Rendu des tables avec données de la base de données
   const renderUserTable = (users) => (
     <div className="bg-white rounded-xl shadow overflow-x-auto">
@@ -1667,7 +1524,7 @@ export default function EquipeView() {
               DÉPARTEMENT
             </th>
             <th className="px-3 py-2 text-xs font-semibold text-gray-600">
-              USERNAME
+              NOM D'UTILISATEUR
             </th>
             <th className="px-3 py-2 text-xs font-semibold text-gray-600">
               RÔLE
@@ -1697,7 +1554,7 @@ export default function EquipeView() {
                       ? "bg-blue-50 text-blue-800"
                       : u.role === "Investigateur" ||
                         u.departement?.includes("CAC") ||
-                        u.departement?.includes("DAGI")
+                        u.departement?.includes("DAJ")
                       ? "bg-orange-50 text-orange-800"
                       : u.role === "Admin"
                       ? "bg-purple-50 text-purple-800"
@@ -1789,28 +1646,20 @@ export default function EquipeView() {
   // Permissions par rôle
   const permissionsConfig = {
     agent_suivi: {
-      name: "Équipe de Suivi (DAAQ/DRSE)",
+      name: "Équipe de suivi (DAAQ/DRSE)",
       permissions: [
         "Voir les nouveaux dossiers",
         "Modifier les informations du visiteur",
         "Classer les dossiers",
         "Ajouter des pièces internes",
         "Mettre à jour les statuts (1 → 4)",
-        "Assigner un dossier à CAC/DAGI",
+        "Assigner un dossier à CAC/DAJ",
         "Ajouter des commentaires internes",
         "Demander des informations supplémentaires",
       ],
-      dashboard: [
-        "Nouveaux dossiers",
-        "En vérification",
-        "En attente d'informations",
-        "Prêts pour investigation",
-        "Graphiques : types de fraude",
-        "Actions rapides : traiter dossier, envoyer message au visiteur",
-      ],
     },
     investigateur: {
-      name: "Équipe d'Investigation (CAC/DAGI)",
+      name: "Équipe d'investigation (CAC/DAJ)",
       permissions: [
         "Voir les dossiers prêts pour investigation (statut 4)",
         "Ajouter un rapport d'investigation",
@@ -1838,11 +1687,11 @@ export default function EquipeView() {
     <div className="p-8">
       {/* Header */}
       <h1 className="text-2xl font-semibold mb-1">
-        Gestion de l'équipe de Suivi
+        Gestion de l'équipe de suivi
       </h1>
       <div className="text-gray-600 mb-6 text-sm">
-        Gestion complète de l'équipe : Équipe de Suivi (DAAQ/DRSE), Équipe
-        d'Investigation (CAC/DAGI) et Permissions
+        Gestion complète de l'équipe : équipe de suivi (DAAQ/DRSE), équipe
+        d'investigation (CAC/DAJ) et permissions
       </div>
 
       {/* Vue d'ensemble avec données réelles */}
@@ -1936,9 +1785,9 @@ export default function EquipeView() {
             <span role="img" aria-label="plus">
               🔒
             </span>{" "}
-            Créer un Utilisateur
+            Créer un utilisateur
           </button>
-          <button
+          {/* <button
             className="bg-gray-100 border border-gray-300 rounded px-5 py-2 text-gray-700 font-medium flex items-center gap-2 shadow hover:bg-gray-200 text-sm"
             onClick={handleExportCSV}
           >
@@ -1946,7 +1795,7 @@ export default function EquipeView() {
               📁
             </span>{" "}
             Exporter CSV
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -2006,11 +1855,11 @@ export default function EquipeView() {
             {activeTab === "roles" && (
               <div className="mt-6">
                 <h2 className="text-lg font-semibold mb-2">
-                  Configuration des Rôles et Permissions
+                  Configuration des rôles et permissions
                 </h2>
                 <div className="text-gray-600 text-sm mb-6">
                   Gérer les permissions par rôle - Tableaux de bord disponibles
-                  dans DashboardAgent.jsx et DashboardInvestigation.jsx
+                  dans l'agent et l'investigateur
                 </div>
                 <div className="space-y-8">
                   {/* Équipe de Suivi (DAAQ / DRSE) */}
@@ -2027,7 +1876,7 @@ export default function EquipeView() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div className="space-y-3">
                           <div className="font-medium text-sm text-gray-800 mb-2">
-                            Permissions Dossiers
+                            Permissions dossiers
                           </div>
                           {permissionsConfig.agent_suivi.permissions.map(
                             (permission, index) => (
@@ -2069,11 +1918,11 @@ export default function EquipeView() {
                     </div>
                   </div>
 
-                  {/* Équipe d'Investigation (CAC / DAGI) */}
+                  {/* Équipe d'Investigation (CAC / DAJ) */}
                   <div className="bg-orange-50 border rounded-xl overflow-hidden">
                     <div className="px-6 py-4 border-b bg-orange-100 font-semibold flex items-center gap-2">
                       <span>🔍</span>
-                      ÉQUIPE D'INVESTIGATION (CAC / DAGI)
+                      ÉQUIPE D'INVESTIGATION (CAC / DAJ)
                     </div>
                     <div className="p-6">
                       <div className="mb-4 text-gray-700 text-sm">
@@ -2185,7 +2034,6 @@ export default function EquipeView() {
                             ))}
                         </div>
                       </div>
-                      <div className="bg-white p-4 rounded-lg border mb-4"></div>
                       <button
                         className="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700 font-semibold text-sm"
                         onClick={() => {

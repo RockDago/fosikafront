@@ -26,6 +26,9 @@ const Header = ({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [avatarErrors, setAvatarErrors] = useState({});
+  const [isLoadingAdminData, setIsLoadingAdminData] = useState(false);
+  const [showAvatar, setShowAvatar] = useState(false); // ✅ NOUVEL ÉTAT
 
   useEffect(() => {
     fetchAdminData();
@@ -90,11 +93,16 @@ const Header = ({
   };
 
   const fetchAdminData = async () => {
+    if (isLoadingAdminData) return;
+
     try {
+      setIsLoadingAdminData(true);
       const token =
         localStorage.getItem("admin_token") ||
         sessionStorage.getItem("admin_token");
       if (!token) return;
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const response = await API.get("/admin/profile", {
         headers: {
@@ -106,11 +114,39 @@ const Header = ({
         const data = response.data;
         if (data.success) {
           setLocalAdminData(data.data);
+
+          // ✅ VÉRIFIER SI L'AVATAR EXISTE ET EST ACCESSIBLE
+          if (data.data?.avatar) {
+            const avatarUrl = getAvatarUrl(data.data.avatar);
+            testAvatarLoad(avatarUrl);
+          } else {
+            setShowAvatar(false);
+          }
         }
       }
     } catch (error) {
-      console.error("Error loading admin data:", error);
+      if (error.response?.status === 429) {
+        console.warn("Trop de requêtes - Attendre avant de réessayer");
+      } else {
+        console.error("Error loading admin data:", error);
+      }
+    } finally {
+      setIsLoadingAdminData(false);
     }
+  };
+
+  // ✅ FONCTION POUR TESTER LE CHARGEMENT DE L'AVATAR
+  const testAvatarLoad = (avatarUrl) => {
+    const img = new Image();
+    img.onload = () => {
+      setShowAvatar(true);
+      setAvatarErrors((prev) => ({ ...prev, "header-avatar": false }));
+    };
+    img.onerror = () => {
+      setShowAvatar(false);
+      setAvatarErrors((prev) => ({ ...prev, "header-avatar": true }));
+    };
+    img.src = avatarUrl;
   };
 
   const getTypeIcon = (type) => {
@@ -159,13 +195,39 @@ const Header = ({
     return data.name ? data.name.substring(0, 2).toUpperCase() : "A";
   };
 
-  const getAvatarUrl = () => {
+  const getAvatarUrl = (avatarPath = null) => {
     const data = localAdminData || adminData;
-    if (!data?.avatar) return null;
+    const avatar = avatarPath || data?.avatar;
 
-    const separator = data.avatar.includes("?") ? "&" : "?";
-    return `${data.avatar}${separator}t=${Date.now()}`;
+    if (!avatar) return null;
+
+    let avatarUrl = avatar;
+
+    if (avatarUrl.includes("storage/avatars/")) {
+      const fileName = avatarUrl.split("/").pop();
+      avatarUrl = `/api/file/avatar/${fileName}`;
+    }
+
+    if (!avatarUrl.startsWith("http")) {
+      const baseURL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+      avatarUrl = `${baseURL}${
+        avatarUrl.startsWith("/") ? "" : "/"
+      }${avatarUrl}`;
+    }
+
+    const separator = avatarUrl.includes("?") ? "&" : "?";
+    return `${avatarUrl}${separator}v=${avatarVersion}&t=${Date.now()}`;
   };
+
+  // ✅ Gestion silencieuse des erreurs
+  const handleAvatarError = (e) => {
+    setShowAvatar(false);
+    setAvatarErrors((prev) => ({ ...prev, "header-avatar": true }));
+  };
+
+  useEffect(() => {
+    setAvatarErrors({});
+  }, [localAdminData, adminData]);
 
   const handleLogout = () => {
     setShowLogoutConfirm(true);
@@ -213,10 +275,6 @@ const Header = ({
         notification: notification,
       });
     }
-  };
-
-  const handleAvatarError = (e) => {
-    console.error("Avatar image failed to load");
   };
 
   const avatarUrl = getAvatarUrl();
@@ -323,13 +381,14 @@ const Header = ({
               className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden relative">
-                {avatarUrl ? (
+                {/* ✅ CORRECTION : Afficher soit l'avatar, soit les initiales, mais pas les deux */}
+                {showAvatar && avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Avatar"
                     className="w-full h-full object-cover"
                     onError={handleAvatarError}
-                    key={avatarVersion}
+                    key={`avatar-${avatarVersion}`}
                   />
                 ) : (
                   <span className="flex items-center justify-center w-full h-full">
